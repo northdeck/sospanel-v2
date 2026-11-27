@@ -1,0 +1,49 @@
+/*
+ * Northdeck brand colors, in one place. They were sampled from the brand
+ * assets in public/northdeck (Icon.png, Light.png, Banner.png):
+ *
+ *   ink     #0b1020  the wordmark and the icon's tile
+ *   teal    #5eead4  the mark's triangle, on dark backgrounds
+ *   teal-d  #0e9f8e  the triangle on light backgrounds (Light.png)
+ *   night   #060913  the banner's background
+ *   haze    #828a9d  the banner's tagline
+ *
+ * Everything else in the panel keeps upstream's design tokens; this file
+ * only nudges the few that carry the brand. It's imported once, from
+ * resources/css/app.css.
+ */
+
+html:root {
+    --nd-ink: #0b1020;
+    --nd-teal: #5eead4;
+    --nd-teal-deep: #0e9f8e;
+    --nd-night: #060913;
+    --nd-haze: #828a9d;
+    --nd-accent: var(--nd-teal-deep);
+
+    /* Light theme: the panel's near-black becomes Northdeck ink. */
+    --primary: var(--nd-ink);
+    --sidebar-primary: var(--nd-ink);
+}
+
+html.dark {
+    --nd-accent: var(--nd-teal);
+}
+
+/* Sign-in pages: ink text on light, the banner's night sky on dark. */
+html:root .auth-page.ds-root {
+    --auth-ink: var(--nd-ink);
+}
+
+html.dark .auth-page.auth-page.ds-root {
+    --auth-ground: var(--nd-night);
+    background-image: radial-gradient(
+        ellipse 70% 45% at 50% 0%,
+        rgb(19 45 66 / 0.55),
+        transparent 70%
+    );
+}
+
+::selection {
+    background-color: color-mix(in srgb, var(--nd-accent) 30%, transparent);
+}

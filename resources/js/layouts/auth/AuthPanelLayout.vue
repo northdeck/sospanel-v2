@@ -2,6 +2,7 @@
 import { Link, usePage } from '@inertiajs/vue3';
 import type { Component } from 'vue';
 import ExtensionSlot from '@/components/ExtensionSlot.vue';
+import NorthdeckLogo from '@/northdeck/components/NorthdeckLogo.vue'; // NORTHDECK
 import { home } from '@/routes';
 
 const slotParts = import.meta.glob<Component>(
@@ -15,7 +16,6 @@ defineProps<{
 }>();
 
 const brand = usePage().props.brand;
-const mark = 'url(/images/landing/serveros-logo.svg)';
 </script>
 
 <template>
@@ -25,24 +25,13 @@ const mark = 'url(/images/landing/serveros-logo.svg)';
         <div
             class="flex min-w-0 flex-1 flex-col items-center justify-between gap-10 py-10 lg:py-14"
         >
+            <!-- NORTHDECK: Northdeck wordmark -->
             <Link
                 :href="home()"
-                :aria-label="$t('Back to ServerOS')"
-                class="flex items-center gap-2 text-(--auth-ink) focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-(--ds-ring)"
+                :aria-label="$t('Back to :name', { name: 'Northdeck' })"
+                class="flex items-center focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-(--ds-ring)"
             >
-                <span
-                    aria-hidden="true"
-                    class="inline-block h-[17px] w-[15px] bg-current"
-                    :style="{
-                        maskImage: mark,
-                        WebkitMaskImage: mark,
-                        maskSize: '100% 100%',
-                        WebkitMaskSize: '100% 100%',
-                    }"
-                />
-                <span class="text-[16px]/5 font-semibold tracking-[-0.03em]"
-                    >ServerOS</span
-                >
+                <NorthdeckLogo :height="24" />
             </Link>
 
             <main class="w-full max-w-[392px] px-6">
