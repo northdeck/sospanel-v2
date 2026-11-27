@@ -5,11 +5,12 @@ type PageLoader = () => Promise<PageModule>;
 
 const own = import.meta.glob<PageModule>('../pages/**/*.vue');
 
-const fromPackages = import.meta.glob<PageModule>(
+const fromPackages = import.meta.glob<PageModule>([
     '../../../vendor/serveroshq/*/resources/js/pages/**/*.vue',
-);
+    '../northdeck/pages/**/*.vue', // NORTHDECK: Northdeck's own pages
+]);
 
-const PACKAGE_PAGE = /\/resources\/js\/pages\/(.+)\.vue$/;
+const PACKAGE_PAGE = /\/(?:resources\/js|northdeck)\/pages\/(.+)\.vue$/; // NORTHDECK: also northdeck/pages
 
 const pages: Record<string, PageLoader> = {};
 

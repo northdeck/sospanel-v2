@@ -26,7 +26,10 @@ import type { Component } from 'vue';
 import LastUsedPill from '@/components/LastUsedPill.vue';
 
 const slotParts = import.meta.glob<Component>(
-    '../../../../vendor/serveroshq/*/resources/js/slots/auth/Login/**/*.vue',
+    [
+        '../../../../vendor/serveroshq/*/resources/js/slots/auth/Login/**/*.vue',
+        '../../northdeck/slots/auth/Login/**/*.vue', // NORTHDECK: SSO button
+    ],
     { eager: true, import: 'default' },
 );
 

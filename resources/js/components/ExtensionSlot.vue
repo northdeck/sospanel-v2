@@ -9,7 +9,7 @@ const props = defineProps<{
     parts: Record<string, Component>;
 }>();
 
-const SLOT_FILE = /\/resources\/js\/slots\/(.+)\/([^/]+)\.vue$/;
+const SLOT_FILE = /\/(?:resources\/js|northdeck)\/slots\/(.+)\/([^/]+)\.vue$/; // NORTHDECK: also resources/js/northdeck/slots
 
 const found = computed(() =>
     Object.entries(props.parts)
