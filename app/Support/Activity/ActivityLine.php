@@ -3,6 +3,7 @@
 namespace App\Support\Activity;
 
 use App\Models\Activity;
+use App\Northdeck\Sso\ActivityLines;
 use App\Support\Audit\AuditContext;
 use App\Support\Monitors\MonitorAlerts;
 use Illuminate\Support\Carbon;
@@ -509,7 +510,7 @@ final class ActivityLine
             'fix.decline' => $set('turned down the agent’s fix'),
             'fix.done' => $set('fixed', null, 'good'),
             'fix.failed' => $set('couldn’t fix', null, 'bad'),
-            default => null,
+            default => ActivityLines::describe($a->action, $meta, $set), // NORTHDECK: SSO sign-in lines
         };
 
         if ($a->action === 'console.command' && $details) {
