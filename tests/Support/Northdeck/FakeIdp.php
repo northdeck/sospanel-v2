@@ -2,6 +2,7 @@
 
 namespace Tests\Support\Northdeck;
 
+use App\Northdeck\Sso\Support\IdpHttp;
 use DOMDocument;
 use DOMXPath;
 use Firebase\JWT\JWT;
@@ -33,6 +34,12 @@ final class FakeIdp
 
     /** @var list<string> keys the JWKS publishes right now */
     public static array $publishedKids = ['key-1'];
+
+    /** @var array<string, mixed> what the UserInfo endpoint answers */
+    public static array $userInfo = [];
+
+    /** @var int how many times UserInfo was asked */
+    public static int $userInfoCalls = 0;
 
     /** @var list<array<string, mixed>> token requests seen */
     public static array $tokenRequests = [];
@@ -70,6 +77,10 @@ final class FakeIdp
     {
         self::$tokenRequests = [];
         self::$publishedKids = $publishedKids;
+        self::$userInfo = [];
+        self::$userInfoCalls = 0;
+        // The fake IdP's hosts don't exist; answer DNS with a public address.
+        IdpHttp::$resolver = fn (string $host) => ['93.184.216.34'];
 
         // Registered once per test; later calls only change what's published.
         if (self::$faked === $issuer.spl_object_id(app())) {
@@ -94,7 +105,11 @@ final class FakeIdp
 
                 return Http::response(['access_token' => 'at', 'token_type' => 'Bearer', 'id_token' => self::idToken(self::$nextClaims ?? [])]);
             },
-            $issuer.'/userinfo' => Http::response([]),
+            $issuer.'/userinfo' => function () {
+                self::$userInfoCalls++;
+
+                return Http::response(self::$userInfo);
+            },
         ]);
     }
 

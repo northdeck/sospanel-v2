@@ -171,3 +171,57 @@ test('the client secret goes to the token endpoint but never to the page', funct
         ->and(json_encode($connection->toArray()))->not->toContain('top-secret')
         ->and($connection->getRawOriginal('client_secret'))->not->toBe('top-secret');
 });
+
+test('UserInfo is asked when the ID token leaves out email_verified, and vouches only for the same email', function () {
+    $workspace = SsoFixtures::workspace();
+    $connection = SsoFixtures::oidc($workspace);
+    SsoFixtures::member($workspace, 'ada@acme.test');
+
+    FakeIdp::$userInfo = ['sub' => 's1', 'email' => 'ada@acme.test', 'email_verified' => true];
+    oidcSignIn($this, $connection, ['sub' => 's1', 'email' => 'ada@acme.test'])->assertRedirect($workspace->url());
+
+    expect(FakeIdp::$userInfoCalls)->toBe(1);
+    $this->assertAuthenticated();
+});
+
+test('a verified email in UserInfo doesn’t vouch for a different email in the ID token', function () {
+    $workspace = SsoFixtures::workspace();
+    $connection = SsoFixtures::oidc($workspace);
+    SsoFixtures::member($workspace, 'ada@acme.test');
+
+    FakeIdp::$userInfo = ['sub' => 's1', 'email' => 'other@acme.test', 'email_verified' => true];
+    oidcSignIn($this, $connection, ['sub' => 's1', 'email' => 'ada@acme.test'])
+        ->assertSessionHas('northdeck_sso_error', fn (string $m) => str_contains($m, 'didn’t confirm'));
+    $this->assertGuest();
+});
+
+test('the ID token wins: email_verified false there isn’t overridden by UserInfo', function () {
+    $workspace = SsoFixtures::workspace();
+    $connection = SsoFixtures::oidc($workspace);
+    SsoFixtures::member($workspace, 'ada@acme.test');
+
+    FakeIdp::$userInfo = ['sub' => 's1', 'email' => 'ada@acme.test', 'email_verified' => true];
+    oidcSignIn($this, $connection, ['sub' => 's1', 'email' => 'ada@acme.test', 'email_verified' => false])
+        ->assertSessionHas('northdeck_sso_error', fn (string $m) => str_contains($m, 'didn’t confirm'));
+    $this->assertGuest();
+});
+
+test('UserInfo for another subject is ignored', function () {
+    $workspace = SsoFixtures::workspace();
+    $connection = SsoFixtures::oidc($workspace);
+    SsoFixtures::member($workspace, 'ada@acme.test');
+
+    FakeIdp::$userInfo = ['sub' => 'someone-else', 'email' => 'ada@acme.test', 'email_verified' => true];
+    oidcSignIn($this, $connection, ['sub' => 's1', 'email' => 'ada@acme.test'])
+        ->assertSessionHas('northdeck_sso_error', fn (string $m) => str_contains($m, 'didn’t confirm'));
+});
+
+test('UserInfo isn’t asked when the ID token has everything', function () {
+    $workspace = SsoFixtures::workspace();
+    $connection = SsoFixtures::oidc($workspace);
+
+    oidcSignIn($this, $connection, ['sub' => 's1', 'email' => 'ada@acme.test', 'email_verified' => true, 'name' => 'Ada', 'groups' => []])
+        ->assertRedirect($workspace->url());
+
+    expect(FakeIdp::$userInfoCalls)->toBe(0);
+});

@@ -95,11 +95,14 @@ final class OidcClient
 
         $claims = $this->verifyIdToken($connection, $doc, $tokens['id_token'], $flow['nonce']);
 
-        if ((! isset($claims['email']) || ! isset($claims[$connection->groupsClaim()])) && is_string($doc['userinfo_endpoint'] ?? null) && is_string($tokens['access_token'] ?? null)) {
-            $claims += $this->userInfo((string) $doc['userinfo_endpoint'], $tokens['access_token'], (string) $claims['sub']);
+        // Ask UserInfo for anything the ID token left out that we act on:
+        // the email, whether it's verified, the name and the groups.
+        $info = [];
+        if ($this->missingClaims($connection, $claims) !== [] && is_string($doc['userinfo_endpoint'] ?? null) && is_string($tokens['access_token'] ?? null)) {
+            $info = $this->userInfo((string) $doc['userinfo_endpoint'], $tokens['access_token'], (string) $claims['sub']);
         }
 
-        return $this->toClaims($connection, $claims, [
+        return $this->toClaims($connection, $claims, $info, [
             'protocol' => 'oidc',
             'id_token' => $tokens['id_token'],
             'end_session_endpoint' => is_string($doc['end_session_endpoint'] ?? null) ? $doc['end_session_endpoint'] : '',
@@ -174,9 +177,8 @@ final class OidcClient
     /** @return array<string, mixed> */
     private function userInfo(string $endpoint, string $accessToken, string $subject): array
     {
-        IdpHttp::assertAllowed($endpoint);
         try {
-            $response = IdpHttp::client()->withToken($accessToken)->get($endpoint);
+            $response = IdpHttp::for($endpoint)->withToken($accessToken)->get($endpoint);
         } catch (Throwable) {
             return [];
         }
@@ -188,14 +190,47 @@ final class OidcClient
 
     /**
      * @param  array<string, mixed>  $claims
+     * @return list<string>
+     */
+    public function missingClaims(SsoConnection $connection, array $claims): array
+    {
+        $wanted = [
+            $connection->stringSetting('email_claim', 'email'),
+            'email_verified',
+            $connection->stringSetting('name_claim', 'name'),
+            $connection->groupsClaim(),
+        ];
+
+        return array_values(array_filter(array_unique($wanted), fn (string $claim) => ! array_key_exists($claim, $claims)));
+    }
+
+    /**
+     * The ID token wins; UserInfo only fills what it left out. The email and
+     * whether it's verified always come from the same place, so a "verified"
+     * from one source never vouches for an email from the other.
+     *
+     * @param  array<string, mixed>  $claims  from the ID token
+     * @param  array<string, mixed>  $info  from UserInfo (already checked to be for the same sub)
      * @param  array<string, string>  $session
      */
-    private function toClaims(SsoConnection $connection, array $claims, array $session): Claims
+    private function toClaims(SsoConnection $connection, array $claims, array $info, array $session): Claims
     {
         $emailClaim = $connection->stringSetting('email_claim', 'email');
-        $email = Str::lower(trim((string) (is_string($claims[$emailClaim] ?? null) ? $claims[$emailClaim] : '')));
+        $emailOf = fn (array $source): string => Str::lower(trim(is_string($source[$emailClaim] ?? null) ? $source[$emailClaim] : ''));
+
+        $email = $emailOf($claims);
+        $verified = $this->emailVerified($connection, $claims);
+        if ($email !== '' && ! array_key_exists('email_verified', $claims) && $emailOf($info) === $email) {
+            // Same address in UserInfo, which says whether it's verified.
+            $verified = $this->emailVerified($connection, $info);
+        } elseif ($email === '' && $emailOf($info) !== '') {
+            $email = $emailOf($info);
+            $verified = $this->emailVerified($connection, $info);
+        }
+
         if ($email === '' && $connection->preset === 'entra' && is_string($claims['preferred_username'] ?? null) && str_contains($claims['preferred_username'], '@')) {
             $email = Str::lower($claims['preferred_username']);
+            $verified = $this->emailVerified($connection, $claims);
         }
 
         $subject = (string) $claims['sub'];
@@ -204,16 +239,17 @@ final class OidcClient
             $subject = ((string) ($claims['tid'] ?? '')).'/'.$claims['oid'];
         }
 
+        $merged = $claims + $info;
         $nameClaim = $connection->stringSetting('name_claim', 'name');
-        $name = is_string($claims[$nameClaim] ?? null) ? $claims[$nameClaim] : trim(((string) ($claims['given_name'] ?? '')).' '.((string) ($claims['family_name'] ?? '')));
+        $name = is_string($merged[$nameClaim] ?? null) ? $merged[$nameClaim] : trim(((string) ($merged['given_name'] ?? '')).' '.((string) ($merged['family_name'] ?? '')));
 
         return new Claims(
             subject: $subject,
             email: $email,
-            emailVerified: $this->emailVerified($connection, $claims),
+            emailVerified: $verified,
             name: $name,
-            groups: Claims::groupsFrom($claims[$connection->groupsClaim()] ?? null),
-            raw: $claims,
+            groups: Claims::groupsFrom($merged[$connection->groupsClaim()] ?? null),
+            raw: $info === [] ? $claims : [...$claims, 'userinfo' => $info],
             session: $session,
         );
     }
