@@ -23,11 +23,36 @@ Northdeck Panel is a fork of the open source [ServerOS panel](https://github.com
 
 Everything here is specific to Northdeck and isn't in upstream ServerOS.
 
-- **Branding**: Northdeck name, logo and colors across the panel, emails and status pages.
+- **Single sign-on**: OpenID Connect and SAML 2.0 with any identity provider, with presets for Google Workspace, Microsoft Entra ID, Okta, OneLogin, JumpCloud, Keycloak, authentik, Auth0 and generic SAML (ADFS and others). Email-domain routing, JIT accounts, group to role mapping, Require SSO with break-glass for owners and admins, single logout, and an optional connection for the whole install. Settings › Single sign-on; setup steps in [docs/sso.md](docs/sso.md).
+- **Branding**: Northdeck name, logo, icons and colors on the sign-in pages, the app header and sidebar, emails and status pages. The logo follows the light or dark theme. Assets are in `public/northdeck/`, colors in `resources/js/northdeck/theme.css`.
+- **Support and docs**: support, source and issue links point to Northdeck (`NORTHDECK_SUPPORT_*`), and the Help page has a Northdeck support row. Upstream's "donate or buy a license" prompt is hidden.
+- **Telemetry**: the anonymous daily ping to serveros.com is off unless `SERVEROS_TELEMETRY=true` (see [Self-hosting](#self-hosting)).
 - **Defaults**: preset settings for Northdeck's servers, regions and backup schedules, so new machines are ready without extra setup.
-- **Integrations**: hooks into Northdeck's own tools and services. <!-- list them, e.g. billing, SSO, alerting -->
-- **Support and docs**: links point to Northdeck's help channels instead of the upstream community.
-- **Other changes**: <!-- anything else Northdeck added, removed or changed -->
+- **Integrations**: hooks into Northdeck's own tools and services. <!-- list them, e.g. billing, alerting (SSO is listed above) -->
+- **Other changes**:
+    - SSO adds `require_sso` to `workspaces` when it isn't there, and four `northdeck_sso_*` tables (migration `2027_01_10_000000_create_northdeck_sso_tables`).
+    - `.env.example` and `docker/self-hosted/compose.yaml` default `APP_NAME` to "Northdeck Panel".
+    - SCIM 2.0 provisioning, as a preview behind `NORTHDECK_SCIM=true` ([docs/sso.md](docs/sso.md#scim-provisioning)).
+
+### Where Northdeck's code lives
+
+To keep merges from upstream clean, Northdeck's code is in its own folders and plugs in through the panel's extension points ([docs/extensions.md](docs/extensions.md)):
+
+| What                     | Where                                                         |
+| ------------------------ | ------------------------------------------------------------- |
+| PHP                      | `app/Northdeck/` (`NorthdeckServiceProvider` wires it all up) |
+| Config                   | `config/northdeck.php`                                        |
+| Migrations               | `database/migrations/*_northdeck_*`                           |
+| Vue pages, slots, styles | `resources/js/northdeck/`                                     |
+| Blade                    | `resources/views/northdeck/`                                  |
+| Assets                   | `public/northdeck/`                                           |
+| Tests                    | `tests/Feature/Northdeck/`, `tests/Support/Northdeck/`        |
+
+Where an upstream file had to change, the change is a small hook marked `NORTHDECK:`. To list them all:
+
+```sh
+git grep -n "NORTHDECK" -- ':!app/Northdeck' ':!resources/js/northdeck' ':!README.md'
+```
 
 Everything else, including Machines, Services and projects, Backups, Monitors, Workflows, Teams and the API/MCP server, works the same as upstream.
 
@@ -49,7 +74,11 @@ Open `https://panel.northdeck.example`, enter the setup code, and the installer 
 
 Then connect servers from Machines › Connect machine. Each one runs [serverosd](https://github.com/serveroshq/daemon), the open source daemon, which connects out to the panel on port 8443.
 
-[docs/self-hosting.md](docs/self-hosting.md) covers upgrades, backups, installing without Docker, and the anonymous daily ping (and how to turn it off).
+[docs/self-hosting.md](docs/self-hosting.md) covers upgrades, backups and installing without Docker.
+
+**The anonymous daily ping.** Upstream panels send serveros.com a small anonymous ping once a day (install id, version, a few counts; [what's in it](docs/self-hosting.md#what-your-install-sends)). Northdeck's build doesn't send it unless you set `SERVEROS_TELEMETRY=true` in `.env`. With it unset or `false`, nothing is sent and `php artisan install:ping` won't send it either. The hourly update checks are separate; `SERVEROS_UPDATE_FEED_URL=` and `DAEMON_RELEASE_FEED_URL=` (empty) turn those off.
+
+**Single sign-on.** Set it up per workspace in Settings › Single sign-on, following [docs/sso.md](docs/sso.md). The URLs your identity provider needs are all on `APP_URL`'s host.
 
 ## Development
 
@@ -84,11 +113,11 @@ Keep Northdeck-specific changes in their own commits or files where you can, so 
 
 ## Help
 
-- Northdeck support: <!-- Northdeck support email, Discord or help desk -->
+- Northdeck support: <!-- TODO(northdeck): support email or help desk --> set `NORTHDECK_SUPPORT_EMAIL` and `NORTHDECK_SUPPORT_URL`, and the panel's Help page and emails use them
 - Bugs in this build: [open an issue](https://github.com/northdeck/sos-panel/issues/new)
 - Bugs that also happen in upstream ServerOS: report them [upstream](https://github.com/serveroshq/panel/issues/new/choose)
 
-Found a security problem? Please don't open a public issue. Contact Northdeck privately at <!-- security contact -->.
+Found a security problem? Please don't open a public issue. Contact Northdeck privately at <!-- TODO(northdeck): security contact, also NORTHDECK_SECURITY_EMAIL -->.
 
 ## License
 
