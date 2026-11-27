@@ -1,0 +1,94 @@
+# Northdeck: checks for the SSO work that the panel's own CI can't do.
+#  - keycloak: real sign-ins against Keycloak over OpenID Connect and SAML.
+#  - docker-image: the self-hosted image builds, and the panel boots in it
+#    with Northdeck's code loaded.
+name: Northdeck SSO
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: northdeck-sso-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  keycloak:
+    name: Keycloak (OIDC and SAML)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Start Keycloak
+        run: |
+          docker run -d --name keycloak -p 8080:8080 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+            -e KC_HOSTNAME=http://127.0.0.1:8080 \
+            -v "$PWD/tests/Feature/Northdeck/Integration/keycloak-realm.json:/opt/keycloak/data/import/northdeck.json:ro" \
+            quay.io/keycloak/keycloak:26.4 start-dev --import-realm
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          extensions: bcmath, intl, pdo_sqlite, zip, curl
+          tools: composer:v2
+          coverage: none
+
+      - name: Install
+        run: |
+          composer install --no-interaction --no-progress --prefer-dist
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Wait for Keycloak
+        run: |
+          for _ in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8080/realms/northdeck/.well-known/openid-configuration > /dev/null && exit 0
+            sleep 3
+          done
+          docker logs keycloak
+          exit 1
+
+      - name: Sign-ins against Keycloak
+        env:
+          KEYCLOAK_URL: http://127.0.0.1:8080
+        run: php artisan test --compact tests/Feature/Northdeck/Integration
+
+      - name: Keycloak logs
+        if: ${{ failure() }}
+        run: docker logs keycloak | tail -200
+
+  docker-image:
+    name: Self-hosted image builds and boots
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build
+        run: docker build -f docker/self-hosted/Dockerfile --build-arg SERVEROS_VERSION=ci -t northdeck/sospanel:ci .
+
+      - name: The panel boots with Northdeck's routes and config
+        run: |
+          key="base64:$(head -c 32 /dev/urandom | base64)"
+          docker run --rm --entrypoint php \
+            -e APP_KEY="$key" -e APP_ENV=production -e DB_CONNECTION=sqlite -e DB_DATABASE=/tmp/ci.sqlite \
+            northdeck/sospanel:ci artisan route:list --name=northdeck --json > routes.json
+          grep -q '"northdeck.sso.oidc.callback"' routes.json
+          grep -q '"northdeck.sso.saml.acs"' routes.json
+          grep -q '"northdeck.scim.users"' routes.json
+          docker run --rm --entrypoint sh northdeck/sospanel:ci -c 'test -f public/northdeck/logo-on-dark.png && test -f public/northdeck/favicon.ico'

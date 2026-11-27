@@ -23,6 +23,8 @@ env:
 jobs:
     prepare:
         name: Version and panel-ee
+        # NORTHDECK: only upstream publishes ghcr.io/serveroshq/panel.
+        if: github.repository == 'serveroshq/panel'
         runs-on: ubuntu-24.04
         timeout-minutes: 15
         environment: self-hosted-image
