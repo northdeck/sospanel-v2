@@ -18,7 +18,10 @@ defineOptions({ inheritAttrs: false });
 defineProps<{ workspace: Workspace }>();
 
 const slotParts = import.meta.glob<Component>(
-    '../../../../vendor/serveroshq/*/resources/js/slots/workspace/Help/**/*.vue',
+    [
+        '../../../../vendor/serveroshq/*/resources/js/slots/workspace/Help/**/*.vue',
+        '../../northdeck/slots/workspace/Help/**/*.vue', // NORTHDECK: support row
+    ],
     { eager: true, import: 'default' },
 );
 
@@ -132,6 +135,11 @@ const issues = computed(() =>
                         />
                     </template>
                 </SettingsItemRow>
+
+                <ExtensionSlot
+                    name="workspace/Help/rows"
+                    :parts="slotParts"
+                /><!-- NORTHDECK -->
 
                 <SettingsItemRow
                     v-if="issues"
