@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/northdeck/sos-panel">
+  <a href="https://github.com/northdeck/sospanel-v2">
     <img alt="Northdeck Panel" src="https://r2.iambrdn.com/northdeck/Banner.png" width="100%">
   </a>
 </p>
@@ -9,8 +9,8 @@
 <p align="center">Northdeck's build of the ServerOS panel, set up for how Northdeck runs its servers.</p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/github/license/northdeck/sos-panel?style=flat-square&color=2563eb"></a>
-  <a href="https://github.com/northdeck/sos-panel/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/northdeck/sos-panel?style=flat-square"></a>
+  <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/github/license/northdeck/sospanel-v2?style=flat-square&color=2563eb"></a>
+  <a href="https://github.com/northdeck/sospanel-v2/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/northdeck/sospanel-v2?style=flat-square"></a>
   <a href="https://github.com/serveroshq/panel"><img alt="Based on ServerOS panel" src="https://img.shields.io/badge/based%20on-ServerOS%20panel-475569?style=flat-square"></a>
 </p>
 
@@ -63,9 +63,10 @@ You need a Linux server with Docker, ports 80, 443 and 8443 open, and a domain l
 Clone this repo and build Northdeck's image:
 
 ```sh
-git clone https://github.com/northdeck/sos-panel.git
-cd sos-panel
-docker build -t northdeck/sos-panel .
+git clone https://github.com/northdeck/sospanel-v2.git
+cd sospanel-v2
+docker build -f docker/self-hosted/Dockerfile -t northdeck/sospanel:dev .
+sudo bash docker/self-hosted/install.sh --domain=panel.northdeck.example --email=you@northdeck.example --image=northdeck/sospanel --version=dev
 ```
 
 <!-- Replace with Northdeck's install script or image registry once published -->
@@ -85,8 +86,8 @@ Then connect servers from Machines › Connect machine. Each one runs [serverosd
 You need PHP 8.4, Composer, Node 22 and npm. SQLite works out of the box.
 
 ```sh
-git clone https://github.com/northdeck/sos-panel.git
-cd sos-panel
+git clone https://github.com/northdeck/sospanel-v2.git
+cd sospanel-v2
 composer setup   # install, .env, key, migrate, build
 composer dev     # the panel, queue worker, logs and Vite together
 ```
@@ -114,7 +115,7 @@ Keep Northdeck-specific changes in their own commits or files where you can, so 
 ## Help
 
 - Northdeck support: <!-- TODO(northdeck): support email or help desk --> set `NORTHDECK_SUPPORT_EMAIL` and `NORTHDECK_SUPPORT_URL`, and the panel's Help page and emails use them
-- Bugs in this build: [open an issue](https://github.com/northdeck/sos-panel/issues/new)
+- Bugs in this build: [open an issue](https://github.com/northdeck/sospanel-v2/issues/new)
 - Bugs that also happen in upstream ServerOS: report them [upstream](https://github.com/serveroshq/panel/issues/new/choose)
 
 Found a security problem? Please don't open a public issue. Contact Northdeck privately at <!-- TODO(northdeck): security contact, also NORTHDECK_SECURITY_EMAIL -->.
