@@ -18,8 +18,8 @@ return [
         'url' => env('NORTHDECK_SUPPORT_URL'),
         // TODO(northdeck): set a private address for security reports.
         'security_email' => env('NORTHDECK_SECURITY_EMAIL'),
-        'source_url' => env('NORTHDECK_SOURCE_URL', 'https://github.com/northdeck/sos-panel'),
-        'issues_url' => env('NORTHDECK_ISSUES_URL', 'https://github.com/northdeck/sos-panel/issues/new'),
+        'source_url' => env('NORTHDECK_SOURCE_URL', 'https://github.com/northdeck/sospanel-v2'),
+        'issues_url' => env('NORTHDECK_ISSUES_URL', 'https://github.com/northdeck/sospanel-v2/issues/new'),
         // Empty hides the community chat link.
         'chat_url' => env('NORTHDECK_CHAT_URL'),
         // Upstream asks self-hosters to donate to ServerOS or buy its

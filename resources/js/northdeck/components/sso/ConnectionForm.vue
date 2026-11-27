@@ -61,7 +61,7 @@ const form = useForm({
     idp_metadata_xml: '',
     idp_certificate: '',
     want_encrypted: flag('want_encrypted', false),
-    allow_idp_initiated: flag('allow_idp_initiated', true),
+    allow_idp_initiated: flag('allow_idp_initiated', false),
 });
 
 const preset = computed(

@@ -27,7 +27,7 @@ test('support and source links point at Northdeck, and upstream’s donate ask i
     NorthdeckServiceProvider::applyDefaults(config());
 
     expect(config('mail.support.address'))->toBe('help@northdeck.example')
-        ->and(config('serveros.brand.source_url'))->toBe('https://github.com/northdeck/sos-panel')
+        ->and(config('serveros.brand.source_url'))->toBe('https://github.com/northdeck/sospanel-v2')
         ->and(config('serveros.brand.discord_url'))->toBeNull()
         ->and(config('serveros.support_ask.enabled'))->toBeFalse();
 });

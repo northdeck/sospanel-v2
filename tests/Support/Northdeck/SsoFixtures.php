@@ -60,7 +60,7 @@ final class SsoFixtures
                 'idp_slo_url' => 'https://idp.test/saml/slo',
                 'idp_certificates' => [SamlService::normalizeCertificate(FakeIdp::key('saml-1')['cert'])],
                 'groups_claim' => 'groups',
-                'allow_idp_initiated' => true,
+                'allow_idp_initiated' => false,
                 ...$settings,
             ],
             'jit' => true,

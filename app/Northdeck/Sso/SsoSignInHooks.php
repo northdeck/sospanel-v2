@@ -18,6 +18,7 @@ final class SsoSignInHooks extends SignInHooks
         return [
             'northdeck.sso.oidc.callback' => 'sso',
             'northdeck.sso.saml.finish' => 'sso',
+            'northdeck.sso.saml.confirm' => 'sso',
         ];
     }
 

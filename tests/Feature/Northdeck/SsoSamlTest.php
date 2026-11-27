@@ -11,6 +11,17 @@ beforeEach(function () {
     config()->set('northdeck.sso.enabled', true);
 });
 
+/** Starts an SP-initiated sign-in and returns its AuthnRequest ID. */
+function samlStart(object $test, $connection): string
+{
+    $start = $test->get(route('northdeck.sso.start', $connection));
+    SsoFixtures::keepSession($test, $start);
+    parse_str((string) parse_url((string) $start->headers->get('Location'), PHP_URL_QUERY), $query);
+    preg_match('/ID="([^"]+)"/', (string) gzinflate(base64_decode((string) $query['SAMLRequest'])), $id);
+
+    return $id[1];
+}
+
 function samlPost(object $test, $connection, string $response): TestResponse
 {
     $acs = $test->post(route('northdeck.sso.saml.acs', $connection), ['SAMLResponse' => $response]);
@@ -51,29 +62,50 @@ test('an SP-initiated sign-in with a signed assertion signs the person in', func
         ->and(SsoIdentity::query()->where('subject', 'persistent-1')->value('user_id'))->toBe($user->id);
 });
 
-test('an IdP-initiated sign-in works when the connection allows it', function () {
+test('an IdP-initiated sign-in is refused unless an admin turns it on', function () {
     $workspace = SsoFixtures::workspace();
     $connection = SsoFixtures::saml($workspace);
 
     samlPost($this, $connection, FakeIdp::samlResponse($connection->acsUrl(), $connection->entityId(), 'p-2', ['email' => ['ada@acme.test']]))
-        ->assertRedirect($workspace->url());
+        ->assertRedirect(route('northdeck.sso.index'))
+        ->assertSessionHas('northdeck_sso_error', 'Sign-ins started from the identity provider are turned off for this connection.');
+    $this->assertGuest();
+});
+
+test('when turned on, an IdP-initiated sign-in asks the person to confirm before signing in', function () {
+    $workspace = SsoFixtures::workspace();
+    $connection = SsoFixtures::saml($workspace, ['allow_idp_initiated' => true]);
+
+    $page = samlPost($this, $connection, FakeIdp::samlResponse($connection->acsUrl(), $connection->entityId(), 'p-2', ['email' => ['ada@acme.test']]));
+    $page->assertInertia(fn ($p) => $p->component('auth/NorthdeckSsoConfirm')->where('email', 'ada@acme.test'));
+    $this->assertGuest();
+
+    $token = $page->viewData('page')['props']['token'];
+    $this->post(route('northdeck.sso.saml.confirm', $connection), ['token' => $token])->assertRedirect($workspace->url());
     $this->assertAuthenticated();
 });
 
-test('an IdP-initiated sign-in is refused when the connection turns it off', function () {
+test('the confirmation can’t be skipped or reused', function () {
     $workspace = SsoFixtures::workspace();
-    $connection = SsoFixtures::saml($workspace, ['allow_idp_initiated' => false]);
+    $connection = SsoFixtures::saml($workspace, ['allow_idp_initiated' => true]);
+    $page = samlPost($this, $connection, FakeIdp::samlResponse($connection->acsUrl(), $connection->entityId(), 'p-6', ['email' => ['ada@acme.test']]));
+    $token = $page->viewData('page')['props']['token'];
 
-    samlPost($this, $connection, FakeIdp::samlResponse($connection->acsUrl(), $connection->entityId(), 'p-2', ['email' => ['ada@acme.test']]))
-        ->assertRedirect(route('northdeck.sso.index'));
+    $this->post(route('northdeck.sso.saml.confirm', $connection), ['token' => str_repeat('x', 40)])->assertRedirect(route('northdeck.sso.index'));
+    $this->assertGuest();
+
+    $this->post(route('northdeck.sso.saml.confirm', $connection), ['token' => $token])->assertRedirect($workspace->url());
+    auth()->logout();
+    $this->post(route('northdeck.sso.saml.confirm', $connection), ['token' => $token])->assertRedirect(route('northdeck.sso.index'));
     $this->assertGuest();
 });
 
 test('an unsigned assertion is refused', function () {
     $workspace = SsoFixtures::workspace();
     $connection = SsoFixtures::saml($workspace);
+    $id = samlStart($this, $connection);
 
-    samlPost($this, $connection, FakeIdp::samlResponse($connection->acsUrl(), $connection->entityId(), 'p-3', ['email' => ['ada@acme.test']], sign: false))
+    samlPost($this, $connection, FakeIdp::samlResponse($connection->acsUrl(), $connection->entityId(), 'p-3', ['email' => ['ada@acme.test']], $id, sign: false))
         ->assertSessionHas('northdeck_sso_error', fn (string $m) => str_contains($m, 'didn’t check out'));
     $this->assertGuest();
 });
@@ -81,8 +113,9 @@ test('an unsigned assertion is refused', function () {
 test('an assertion signed by another key is refused', function () {
     $workspace = SsoFixtures::workspace();
     $connection = SsoFixtures::saml($workspace);
+    $id = samlStart($this, $connection);
 
-    samlPost($this, $connection, FakeIdp::samlResponse($connection->acsUrl(), $connection->entityId(), 'p-3', ['email' => ['ada@acme.test']], kid: 'attacker'))
+    samlPost($this, $connection, FakeIdp::samlResponse($connection->acsUrl(), $connection->entityId(), 'p-3', ['email' => ['ada@acme.test']], $id, kid: 'attacker'))
         ->assertSessionHas('northdeck_sso_error', fn (string $m) => str_contains($m, 'didn’t check out'));
     $this->assertGuest();
 });
@@ -90,8 +123,9 @@ test('an assertion signed by another key is refused', function () {
 test('an assertion for another service provider is refused', function () {
     $workspace = SsoFixtures::workspace();
     $connection = SsoFixtures::saml($workspace);
+    $id = samlStart($this, $connection);
 
-    samlPost($this, $connection, FakeIdp::samlResponse($connection->acsUrl(), 'https://other-sp.test', 'p-3', ['email' => ['ada@acme.test']]))
+    samlPost($this, $connection, FakeIdp::samlResponse($connection->acsUrl(), 'https://other-sp.test', 'p-3', ['email' => ['ada@acme.test']], $id))
         ->assertSessionHas('northdeck_sso_error');
     $this->assertGuest();
 });
@@ -99,8 +133,9 @@ test('an assertion for another service provider is refused', function () {
 test('an expired assertion is refused', function () {
     $workspace = SsoFixtures::workspace();
     $connection = SsoFixtures::saml($workspace);
+    $id = samlStart($this, $connection);
 
-    samlPost($this, $connection, FakeIdp::samlResponse($connection->acsUrl(), $connection->entityId(), 'p-3', ['email' => ['ada@acme.test']], notOnOrAfter: -600))
+    samlPost($this, $connection, FakeIdp::samlResponse($connection->acsUrl(), $connection->entityId(), 'p-3', ['email' => ['ada@acme.test']], $id, notOnOrAfter: -600))
         ->assertSessionHas('northdeck_sso_error');
     $this->assertGuest();
 });
@@ -108,7 +143,8 @@ test('an expired assertion is refused', function () {
 test('the same assertion can’t be posted twice', function () {
     $workspace = SsoFixtures::workspace();
     $connection = SsoFixtures::saml($workspace);
-    $response = FakeIdp::samlResponse($connection->acsUrl(), $connection->entityId(), 'p-4', ['email' => ['ada@acme.test']]);
+    $id = samlStart($this, $connection);
+    $response = FakeIdp::samlResponse($connection->acsUrl(), $connection->entityId(), 'p-4', ['email' => ['ada@acme.test']], $id);
 
     samlPost($this, $connection, $response)->assertRedirect($workspace->url());
     auth()->logout();

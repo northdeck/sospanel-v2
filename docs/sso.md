@@ -126,7 +126,7 @@ All three are OpenID Connect; pick the preset and follow the provider's "OIDC we
 
 ### Generic OpenID Connect
 
-Anything with a `/.well-known/openid-configuration`. The panel uses the authorization code flow with PKCE (S256), and checks `state`, `nonce`, the ID token's signature against the provider's JWKS (fetched again when a token names a new key), `iss`, `aud`/`azp`, `exp` and `iat`. Public clients without a secret work too. Under **More settings** you can change which claims hold the email, name and groups.
+Anything with a `/.well-known/openid-configuration`. The panel uses the authorization code flow with PKCE (S256), and checks `state`, `nonce`, the ID token's signature against the provider's JWKS (fetched again when a token names a new key), `iss`, `aud`/`azp`, `exp` and `iat`. Public clients without a secret work too. If the ID token leaves out the email, `email_verified`, the name or the groups, the panel asks the UserInfo endpoint (only answers for the same `sub` count). The ID token wins where both have a claim, and `email_verified` only counts for the address it came with: a verified email in UserInfo never vouches for a different one in the ID token. Under **More settings** you can change which claims hold the email, name and groups.
 
 ### Generic SAML
 
@@ -138,7 +138,7 @@ Works with ADFS, Entra ID (Enterprise app › SAML), Okta SAML, OneLogin, JumpCl
 4. NameID: **persistent** (or unspecified with a stable value). Transient NameIDs are refused, because they change at every sign-in; if that's all your provider sends, set **Subject attribute** to a stable attribute instead.
 5. Send the email in an attribute (`email`, `mail`, or the `.../claims/emailaddress` URI all work), and groups in `groups`, `memberOf` or the Microsoft groups claim URI.
 
-Optional: turn on **Encrypted assertions** and give the provider the panel's certificate (it's in the metadata). Sign-ins started from the provider's app list (IdP-initiated) work unless you turn them off. Each assertion ID is remembered until it expires, so a captured response can't be used twice; clocks may differ by up to 3 minutes.
+Optional: turn on **Encrypted assertions** and give the provider the panel's certificate (it's in the metadata). Sign-ins started from the provider's app list (IdP-initiated) are **off** unless you turn on **Sign-ins started at the provider**: an unsolicited response could have been posted by any website (login CSRF), so it's refused. With it on, the person still sees a "Continue as …" page and has to confirm before they're signed in. Sign-ins started from the panel always check that the response answers a request this browser made (InResponseTo). Each assertion ID is remembered until it expires, so a captured response can't be used twice; clocks may differ by up to 3 minutes.
 
 - **ADFS**: Add Relying Party Trust › import from the metadata URL. Claim rules: send `E-Mail-Address` as `E-Mail Address`, and a persistent NameID.
 - **Entra ID (SAML)**: Enterprise applications › New › Create your own › Integrate any other application › Single sign-on › SAML. Upload the metadata file, or paste Identifier and Reply URL. Under Attributes & Claims add a groups claim if you want group mapping. Set the signing option to **Sign SAML assertion** (or response and assertion).
@@ -198,7 +198,9 @@ What it does:
 
 - **Users**: creating one adds that person to the workspace (making an account if there isn't one; the email must be on a verified domain). `active: false` or deleting removes them from the workspace, and signs them out if it was their last workspace. The owner is never removed. Names follow the provider; the sign-in email doesn't (it's logged instead), so a provider can't point an account at another address.
 - **Groups**: membership maps to roles through the same **Groups to roles** table sign-ins use, matched on the group's display name or external ID.
-- Supported: list with `filter=<attr> eq "<value>"` (`userName`, `externalId`, `emails.value`, `displayName`), get, create, replace (PUT), PATCH (including Entra's `members[value eq "..."]` removes) and delete. Not supported: bulk, sorting, ETags, password changes.
+- Supported: list with `filter=<attr> eq "<value>"` (`userName`, `externalId`, `emails.value`, `displayName`), get, create, replace (PUT), PATCH and delete. Not supported: bulk, sorting, ETags, password changes.
+- PATCH does `add`, `replace` and `remove`, and checks every operation before applying any, so a bad one changes nothing. Any other op is `400 invalidSyntax`; an unknown attribute is `400 invalidPath`. `remove` clears `externalId` on users, and on groups removes members (all of them, a list, or Entra's `members[value eq "..."]`) or `externalId`. Removing what the panel can't do without (`userName`, `active`, `emails`, the name, a group's `displayName`) is `400 mutability`; to take someone out, set `active` to false or delete them.
+- Core and enterprise attributes the panel doesn't keep (`title`, `phoneNumbers`, `addresses`, the enterprise extension and so on) are accepted and not stored, as SCIM allows, so Entra and Okta can send their usual payloads.
 
 Every change shows in Activity.
 
@@ -214,7 +216,13 @@ Every change shows in Activity.
 | `NORTHDECK_SSO_PROTOCOL` and the rest | empty   | The install-wide connection, above.                      |
 | `NORTHDECK_SCIM`                      | `false` | SCIM 2.0 provisioning (preview).                         |
 
-By default the panel only talks to providers on public https addresses, so a workspace admin can't point it at your internal network. Set `NORTHDECK_SSO_ALLOW_PRIVATE_HOSTS=true` for a LAN authentik or Keycloak.
+By default the panel only talks to providers on public https addresses, so a workspace admin can't point it at your internal network. Every request to a provider (discovery, signing keys, the token and UserInfo endpoints, SAML metadata):
+
+- resolves the host once, over IPv4 and IPv6, and refuses it if **any** address is private, loopback, link-local, carrier-grade NAT, multicast, reserved or documentation-only, including IPv6 forms that carry an IPv4 address (`::ffff:`, 6to4, NAT64);
+- connects to the address it checked (curl's `CURLOPT_RESOLVE`), so a second DNS answer can't send it elsewhere (DNS rebinding). TLS still checks the certificate for the real host name;
+- doesn't follow redirects.
+
+Set `NORTHDECK_SSO_ALLOW_PRIVATE_HOSTS=true` for a LAN authentik or Keycloak; requests are still pinned to the address that was looked up.
 
 ## Troubleshooting
 
