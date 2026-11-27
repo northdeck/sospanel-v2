@@ -123,26 +123,73 @@ final class ScimController extends Controller
 
     public function patchUser(Request $request, string $id): JsonResponse
     {
+        $workspace = $this->workspace($request);
         $scim = $this->findUser($request, $id);
         if ($scim === null) {
             return Scim::error(404, 'No such user.');
         }
 
+        // Check every operation first, so a bad one changes nothing.
         $changes = [];
-        foreach ((array) $request->json('Operations', []) as $op) {
-            if (! is_array($op) || ! in_array(strtolower((string) ($op['op'] ?? '')), ['replace', 'add'], true)) {
+        $removeExternalId = false;
+        foreach ($this->operations($request) as [$op, $path, $value]) {
+            if ($op === 'remove') {
+                $attribute = $path === null ? null : PatchPath::userAttribute($path);
+                if ($attribute === null) {
+                    return Scim::error(400, 'remove needs a path to a user attribute.', $path === null ? 'noTarget' : 'invalidPath');
+                }
+                if ($attribute === 'externalId') {
+                    $removeExternalId = true;
+                } elseif (in_array($attribute, PatchPath::IGNORED_USER, true)) {
+                    // Not stored here, so there's nothing to remove.
+                } else {
+                    return Scim::error(400, "{$attribute} can't be removed from a user.", 'mutability');
+                }
+
                 continue;
             }
-            $path = (string) ($op['path'] ?? '');
-            $value = $op['value'] ?? null;
-            if ($path === '' && is_array($value)) {
-                $changes = [...$changes, ...$value];
-            } elseif ($path !== '') {
-                data_set($changes, $path, $value);
+
+            if ($path === null) {
+                if (! is_array($value) || array_is_list($value)) {
+                    return Scim::error(400, "{$op} without a path needs an object of attributes.", 'invalidValue');
+                }
+                foreach ($value as $key => $v) {
+                    $attribute = PatchPath::userAttribute((string) $key);
+                    if ($attribute === null) {
+                        return Scim::error(400, "Unknown user attribute: {$key}.", 'invalidPath');
+                    }
+                    if (! in_array($attribute, PatchPath::IGNORED_USER, true)) {
+                        // Entra sends {"name.givenName": "Ada"}; Okta sends {"name": {...}}.
+                        data_set($changes, PatchPath::strip((string) $key), $v);
+                    }
+                }
+
+                continue;
+            }
+
+            $attribute = PatchPath::userAttribute($path);
+            if ($attribute === null) {
+                return Scim::error(400, "Unknown user attribute: {$path}.", 'invalidPath');
+            }
+            if ($attribute === 'emails') {
+                // emails[type eq "work"].value and the like: only used to log
+                // that the sign-in email is kept (see updateUser).
+                $changes['emails'] = is_array($value) ? $value : [['value' => $value, 'primary' => true]];
+            } elseif (! in_array($attribute, PatchPath::IGNORED_USER, true)) {
+                data_set($changes, PatchPath::strip($path), $value);
             }
         }
 
-        $this->updateUser($this->workspace($request), $scim, $changes);
+        // A partial name (just givenName, say) keeps the other half.
+        if (is_array($changes['name'] ?? null) && ! isset($changes['name']['formatted'])) {
+            [$given, $family] = array_pad(explode(' ', (string) $scim->user->name, 2), 2, '');
+            $changes['name'] += ['givenName' => $given, 'familyName' => $family];
+        }
+
+        if ($removeExternalId) {
+            $scim->forceFill(['external_id' => null])->save();
+        }
+        $this->updateUser($workspace, $scim, $changes);
 
         return Scim::json(Scim::userResource($scim->refresh()->load(['user', 'groups'])));
     }
@@ -230,37 +277,99 @@ final class ScimController extends Controller
 
         $before = $this->currentMembers($group);
         $members = $before;
+        $rename = null;
+        $externalId = false;
 
-        foreach ((array) $request->json('Operations', []) as $op) {
-            if (! is_array($op)) {
+        // Check every operation first, so a bad one changes nothing.
+        foreach ($this->operations($request) as [$op, $path, $value]) {
+            $target = strtolower((string) $path);
+
+            if ($path === null) {
+                if ($op === 'remove') {
+                    return Scim::error(400, 'remove needs a path.', 'noTarget');
+                }
+                if (! is_array($value) || array_is_list($value)) {
+                    return Scim::error(400, "{$op} without a path needs an object of attributes.", 'invalidValue');
+                }
+                foreach ($value as $key => $v) {
+                    $key = strtolower((string) $key);
+                    if ($key === 'displayname') {
+                        $rename = is_scalar($v) ? (string) $v : '';
+                    } elseif ($key === 'externalid') {
+                        $externalId = is_string($v) ? $v : null;
+                    } elseif ($key === 'members') {
+                        $named = $this->memberIds($workspace, is_array($v) ? $v : []);
+                        $members = $op === 'add' ? array_values(array_unique([...$members, ...$named])) : $named;
+                    } elseif (! in_array($key, ['id', 'schemas', 'meta'], true)) {
+                        return Scim::error(400, "Unknown group attribute: {$key}.", 'invalidPath');
+                    }
+                }
+
                 continue;
             }
-            $kind = strtolower((string) ($op['op'] ?? ''));
-            $path = (string) ($op['path'] ?? '');
-            $value = $op['value'] ?? null;
 
-            if ($path === '' && is_array($value) && isset($value['displayName'])) {
-                $this->rename($workspace, $group, (string) $value['displayName']);
-            } elseif (strtolower($path) === 'displayname') {
-                $this->rename($workspace, $group, (string) $value);
-            } elseif (str_starts_with(strtolower($path), 'members')) {
-                // Entra sends remove with a filter: members[value eq "id"].
-                if ($kind === 'remove' && preg_match('/value eq "([^"]+)"/', $path, $m) === 1) {
-                    $members = array_values(array_diff($members, $this->memberIds($workspace, [['value' => $m[1]]])));
-                } elseif ($kind === 'remove') {
-                    $members = is_array($value) ? array_values(array_diff($members, $this->memberIds($workspace, $value))) : [];
-                } elseif ($kind === 'add') {
-                    $members = array_values(array_unique([...$members, ...$this->memberIds($workspace, (array) $value)]));
-                } elseif ($kind === 'replace') {
-                    $members = $this->memberIds($workspace, (array) $value);
+            if ($target === 'displayname') {
+                if ($op === 'remove') {
+                    return Scim::error(400, "A group's displayName can't be removed.", 'mutability');
                 }
+                $rename = is_scalar($value) ? (string) $value : '';
+            } elseif ($target === 'externalid') {
+                $externalId = $op === 'remove' ? null : (is_string($value) ? $value : null);
+            } elseif (str_starts_with($target, 'members')) {
+                $filtered = preg_match('/^members\[value eq "([^"]+)"\]$/i', (string) $path, $m) === 1;
+                if (! $filtered && $target !== 'members') {
+                    return Scim::error(400, "Unsupported path: {$path}.", 'invalidPath');
+                }
+                $named = $filtered ? $this->memberIds($workspace, [['value' => $m[1]]]) : $this->memberIds($workspace, is_array($value) ? $value : []);
+
+                $members = match ($op) {
+                    // Entra: members[value eq "id"]. Plain "members" with no
+                    // value removes everyone, as RFC 7644 says.
+                    'remove' => $filtered || is_array($value) ? array_values(array_diff($members, $named)) : [],
+                    'add' => array_values(array_unique([...$members, ...$named])),
+                    default => $named,
+                };
+            } else {
+                return Scim::error(400, "Unsupported path: {$path}.", $op === 'remove' ? 'noTarget' : 'invalidPath');
             }
         }
 
+        if ($rename !== null) {
+            $this->rename($workspace, $group, $rename);
+        }
+        if ($externalId !== false) {
+            $group->forceFill(['external_id' => $externalId])->save();
+        }
         $group->members()->sync($members);
         $this->membersChanged($workspace, $group, $before, $members);
 
         return Scim::json(Scim::groupResource($group->refresh()));
+    }
+
+    /**
+     * A PatchOp body's operations, normalised. Ops other than add, replace
+     * and remove are an error, not something to skip.
+     *
+     * @return list<array{0: 'add'|'replace'|'remove', 1: string|null, 2: mixed}>
+     */
+    private function operations(Request $request): array
+    {
+        $operations = $request->json('Operations');
+        if (! is_array($operations) || $operations === []) {
+            abort(Scim::error(400, 'A PATCH needs Operations.', 'invalidSyntax'));
+        }
+
+        $out = [];
+        foreach ($operations as $op) {
+            $kind = is_array($op) ? strtolower((string) ($op['op'] ?? '')) : '';
+            if (! in_array($kind, ['add', 'replace', 'remove'], true)) {
+                abort(Scim::error(400, 'Each operation must be add, replace or remove.', 'invalidSyntax'));
+            }
+            $path = is_string($op['path'] ?? null) && trim($op['path']) !== '' ? trim($op['path']) : null;
+            $out[] = [$kind, $path, $op['value'] ?? null];
+        }
+
+        return $out;
     }
 
     public function deleteGroup(Request $request, string $id): JsonResponse

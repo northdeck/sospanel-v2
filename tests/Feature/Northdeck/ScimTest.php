@@ -101,3 +101,81 @@ test('group membership maps to roles through the SSO group mappings', function (
     scim($this, $secret)->patchJson('/api/scim/v2/Groups/'.$groupId, ['Operations' => [['op' => 'remove', 'path' => 'members[value eq "'.$userId.'"]']]])->assertOk();
     expect(scim($this, $secret)->getJson('/api/scim/v2/Groups/'.$groupId)->json('members'))->toBe([]);
 });
+
+function scimUser(object $test, string $secret, string $email = 'ada@acme.test'): string
+{
+    return scim($test, $secret)->postJson('/api/scim/v2/Users', [
+        'userName' => $email, 'externalId' => 'ext-1',
+        'name' => ['givenName' => 'Ada', 'familyName' => 'Lovelace'],
+        'emails' => [['value' => $email, 'primary' => true]],
+    ])->assertCreated()->json('id');
+}
+
+test('PATCH remove clears externalId', function () {
+    $workspace = SsoFixtures::workspace();
+    [, $secret] = ScimToken::issue($workspace);
+    $id = scimUser($this, $secret);
+
+    scim($this, $secret)->patchJson('/api/scim/v2/Users/'.$id, ['Operations' => [['op' => 'remove', 'path' => 'externalId']]])
+        ->assertOk()->assertJsonPath('externalId', null);
+});
+
+test('PATCH remove of an attribute the panel needs is refused, not skipped', function (string $path) {
+    $workspace = SsoFixtures::workspace();
+    [, $secret] = ScimToken::issue($workspace);
+    $id = scimUser($this, $secret);
+
+    scim($this, $secret)->patchJson('/api/scim/v2/Users/'.$id, ['Operations' => [['op' => 'remove', 'path' => $path]]])
+        ->assertStatus(400)->assertJsonPath('scimType', 'mutability');
+})->with(['userName', 'active', 'emails', 'name.givenName', 'displayName']);
+
+test('PATCH with an unknown op or path is an error, and changes nothing', function (array $operations, string $type) {
+    $workspace = SsoFixtures::workspace();
+    [, $secret] = ScimToken::issue($workspace);
+    $id = scimUser($this, $secret);
+
+    scim($this, $secret)->patchJson('/api/scim/v2/Users/'.$id, ['Operations' => $operations])
+        ->assertStatus(400)->assertJsonPath('scimType', $type);
+
+    $user = User::query()->where('email', 'ada@acme.test')->firstOrFail();
+    expect($user->name)->toBe('Ada Lovelace')->and($workspace->fresh()->hasMember($user))->toBeTrue();
+})->with([
+    'unknown op' => [[['op' => 'move', 'path' => 'active', 'value' => false]], 'invalidSyntax'],
+    'unknown path' => [[['op' => 'replace', 'path' => 'favouriteColour', 'value' => 'teal']], 'invalidPath'],
+    'bad op after a good one' => [[['op' => 'replace', 'path' => 'active', 'value' => false], ['op' => 'copy']], 'invalidSyntax'],
+    'remove without a path' => [[['op' => 'remove']], 'noTarget'],
+]);
+
+test('PATCH understands what Entra and Okta send', function () {
+    $workspace = SsoFixtures::workspace();
+    [, $secret] = ScimToken::issue($workspace);
+    $id = scimUser($this, $secret);
+
+    // Entra: dotted keys in a value object, "False" as a string, enterprise extension, title.
+    scim($this, $secret)->patchJson('/api/scim/v2/Users/'.$id, ['Operations' => [
+        ['op' => 'replace', 'value' => ['name.givenName' => 'Augusta', 'title' => 'Countess']],
+        ['op' => 'add', 'path' => 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department', 'value' => 'Maths'],
+        ['op' => 'Replace', 'path' => 'active', 'value' => 'False'],
+    ]])->assertOk()->assertJsonPath('active', false);
+
+    $user = User::query()->where('email', 'ada@acme.test')->firstOrFail();
+    expect($user->name)->toBe('Augusta Lovelace')->and($workspace->fresh()->hasMember($user))->toBeFalse();
+});
+
+test('Group PATCH removes everyone with a bare members remove, and refuses unknown paths', function () {
+    $workspace = SsoFixtures::workspace();
+    [, $secret] = ScimToken::issue($workspace);
+    $a = scimUser($this, $secret, 'ada@acme.test');
+    $b = scimUser($this, $secret, 'grace@acme.test');
+    $group = scim($this, $secret)->postJson('/api/scim/v2/Groups', ['displayName' => 'Eng', 'members' => [['value' => $a], ['value' => $b]]])->json('id');
+
+    scim($this, $secret)->patchJson('/api/scim/v2/Groups/'.$group, ['Operations' => [['op' => 'remove', 'path' => 'owner']]])
+        ->assertStatus(400)->assertJsonPath('scimType', 'noTarget');
+    expect(scim($this, $secret)->getJson('/api/scim/v2/Groups/'.$group)->json('members'))->toHaveCount(2);
+
+    scim($this, $secret)->patchJson('/api/scim/v2/Groups/'.$group, ['Operations' => [['op' => 'remove', 'path' => 'members']]])->assertOk();
+    expect(scim($this, $secret)->getJson('/api/scim/v2/Groups/'.$group)->json('members'))->toBe([]);
+
+    scim($this, $secret)->patchJson('/api/scim/v2/Groups/'.$group, ['Operations' => [['op' => 'remove', 'path' => 'displayName']]])
+        ->assertStatus(400)->assertJsonPath('scimType', 'mutability');
+});
