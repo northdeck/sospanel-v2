@@ -315,7 +315,7 @@ final class SsoSettingsController extends Controller
         $data['settings'] = [
             ...$settings,
             'want_encrypted' => (bool) ($data['want_encrypted'] ?? $connection?->setting('want_encrypted', false) ?? false),
-            'allow_idp_initiated' => (bool) ($data['allow_idp_initiated'] ?? $connection?->setting('allow_idp_initiated', true) ?? true),
+            'allow_idp_initiated' => (bool) ($data['allow_idp_initiated'] ?? $connection?->setting('allow_idp_initiated', false) ?? false),
             'single_logout' => (bool) ($data['single_logout'] ?? $connection?->setting('single_logout', true) ?? true),
         ];
 

@@ -27,6 +27,7 @@ final class Routes
                     ->withoutMiddleware(PreventRequestForgery::class)
                     ->name('saml.acs');
                 Route::get('saml/finish', [SsoController::class, 'samlFinish'])->name('saml.finish');
+                Route::post('saml/confirm', [SsoController::class, 'samlConfirm'])->name('saml.confirm');
                 Route::get('saml/metadata', [SsoController::class, 'metadata'])->name('saml.metadata');
                 Route::get('saml/slo', [SsoController::class, 'slo'])->name('saml.slo');
             });

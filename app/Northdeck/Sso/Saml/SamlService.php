@@ -129,7 +129,8 @@ final class SamlService
         }
 
         $inResponseTo = $response->document->documentElement?->getAttribute('InResponseTo') ?: null;
-        if ($inResponseTo === null && ! (bool) $connection->setting('allow_idp_initiated', true)) {
+        // Unsolicited responses are refused unless an admin turned them on.
+        if ($inResponseTo === null && ! (bool) $connection->setting('allow_idp_initiated', false)) {
             throw new SsoException('Sign-ins started from the identity provider are turned off for this connection.');
         }
 
@@ -357,9 +358,9 @@ final class SamlService
     /** @return array{idp_entity_id: string, idp_sso_url: string, idp_slo_url: string, idp_certificates: list<string>} */
     public static function fetchIdpMetadata(string $url): array
     {
-        IdpHttp::assertAllowed($url);
+        $client = IdpHttp::for($url)->accept('application/samlmetadata+xml, application/xml, text/xml');
         try {
-            $response = IdpHttp::client()->accept('application/samlmetadata+xml, application/xml, text/xml')->get($url);
+            $response = $client->get($url);
         } catch (Throwable) {
             throw new SsoException('Couldn’t reach the metadata URL.');
         }

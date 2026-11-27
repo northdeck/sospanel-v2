@@ -31,6 +31,8 @@ final class SsoController extends Controller
 {
     private const string PENDING = 'northdeck_sso_pending';
 
+    private const string UNSOLICITED = 'northdeck_sso_unsolicited';
+
     private const int PENDING_MINUTES = 15;
 
     public function __construct(
@@ -191,7 +193,51 @@ final class SsoController extends Controller
             return $this->toLogin($request, __('That sign-in expired. Try again.'));
         }
 
+        // Started at the identity provider, so nothing ties it to this
+        // browser: a page on another site could have posted it (login CSRF).
+        // Ask the person to confirm before signing anyone in.
+        if ($inResponseTo === null) {
+            $token = Str::random(40);
+            $request->session()->put(self::UNSOLICITED.'.'.$token, [
+                'connection' => $connection->uuid,
+                'claims' => serialize($claims),
+                'at' => now()->getTimestamp(),
+            ]);
+
+            return Inertia::render('auth/NorthdeckSsoConfirm', [
+                'connection' => $connection->name,
+                'email' => $claims->email,
+                'signedInAs' => $request->user()?->email,
+                'confirmUrl' => SsoUrls::route('northdeck.sso.saml.confirm', $connection),
+                'token' => $token,
+            ])->toResponse($request);
+        }
+
         return $this->finish($request, $connection, (array) $pending, $claims);
+    }
+
+    /** The person pressed Continue on the confirmation page (a CSRF-checked POST). */
+    public function samlConfirm(Request $request, SsoConnection $connection): SymfonyResponse
+    {
+        $token = (string) $request->validate(['token' => ['required', 'string', 'size:40']])['token'];
+        $parked = $request->session()->pull(self::UNSOLICITED.'.'.$token);
+
+        if (! is_array($parked) || ($parked['connection'] ?? null) !== $connection->uuid
+            || ($parked['at'] ?? 0) < now()->subMinutes(5)->getTimestamp()) {
+            return $this->toLogin($request, __('That sign-in expired. Try again.'));
+        }
+
+        $claims = unserialize((string) $parked['claims'], ['allowed_classes' => [Claims::class]]);
+        if (! $claims instanceof Claims) {
+            return $this->toLogin($request, __('That sign-in expired. Try again.'));
+        }
+
+        $response = $this->finish($request, $connection, ['test' => false], $claims);
+
+        // The page posted with Inertia; the next stop may be another host.
+        return $response instanceof RedirectResponse && $request->header('X-Inertia')
+            ? Inertia::location($response->getTargetUrl())
+            : $response;
     }
 
     public function metadata(SsoConnection $connection): Response
