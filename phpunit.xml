@@ -44,6 +44,10 @@
         <env name="DB_URL" value=""/>
         <!-- The suite runs as the cloud edition; the self-hosted tests switch to it themselves. -->
         <env name="SERVEROS_EDITION" value="cloud"/>
+        <!-- NORTHDECK: upstream tests run with upstream defaults; tests/Feature/Northdeck turn ours on. -->
+        <env name="NORTHDECK_SSO" value="false"/>
+        <env name="NORTHDECK_HIDE_UPSTREAM_ASK" value="false"/>
+        <env name="SERVEROS_TELEMETRY" value="true"/>
         <env name="SERVEROS_COMING_SOON" value="false"/>
         <!-- The handoff test turns this on. A local .env must not send every welcome test to the site. -->
         <env name="SERVEROS_SITE_ONBOARDING" value="false"/>

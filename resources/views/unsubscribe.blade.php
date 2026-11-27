@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex">
     <meta name="color-scheme" content="light dark">
-    <title>{{ $done ? $copy['doneTitle'] : 'Unsubscribe' }} · ServerOS</title>
+    <title>{{ $done ? $copy['doneTitle'] : 'Unsubscribe' }} · {{ config('app.name') }}</title>{{-- NORTHDECK --}}
     @include('partials.favicons')
     <style>
         :root { --bg: #fff; --ink: #151515; --muted: #6b6b6b; }

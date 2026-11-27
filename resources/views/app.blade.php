@@ -101,7 +101,7 @@
         @endif
         @php($authTitle = ['auth/Login' => 'Sign in', 'auth/Register' => 'Create account', 'auth/ForgotPassword' => 'Forgot password', 'auth/ResetPassword' => 'Reset password'][$page['component']] ?? null)
         @if ($authTitle)
-            <meta name="description" content="{{ $page['component'] === 'auth/Register' ? 'Create a ServerOS account: connect the servers you already own and manage everything on them from one panel.' : 'Sign in to ServerOS, the panel for the servers you already own.' }}">
+            <meta name="description" content="{{ $page['component'] === 'auth/Register' ? 'Create a '.config('app.name').' account: connect the servers you already own and manage everything on them from one panel.' : 'Sign in to '.config('app.name').', the panel for the servers you already own.' }}">{{-- NORTHDECK: app name, not ServerOS --}}
         @endif
         <x-inertia::head>
             <title>{{ $indexable && ! empty($page['props']['meta']['title']) ? $page['props']['meta']['title'] : ($authTitle ? $authTitle.' - '.config('app.name') : config('app.name', 'Laravel')) }}</title>

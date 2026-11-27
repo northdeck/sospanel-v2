@@ -24,7 +24,7 @@ x-panel: &panel
     environment: &panel-env
         SERVEROS_EDITION: self-hosted
         SERVEROS_DOMAIN: ${SERVEROS_DOMAIN:?Set SERVEROS_DOMAIN in .env}
-        APP_NAME: ${APP_NAME:-ServerOS}
+        APP_NAME: ${APP_NAME:-Northdeck Panel} # NORTHDECK
         APP_ENV: production
         APP_DEBUG: 'false'
         APP_KEY: ${APP_KEY:?Set APP_KEY in .env}
@@ -61,7 +61,8 @@ x-panel: &panel
         DAEMON_RELEASE_PUBKEY: ${DAEMON_RELEASE_PUBKEY:-5245716675785d7bf5dc36d783fa5c690c705da4d542082f398e3e79543d06f8}
         # The anonymous daily install ping (docs/self-hosting.md, "What your
         # install sends"): SERVEROS_TELEMETRY=false in .env turns it off.
-        SERVEROS_TELEMETRY: ${SERVEROS_TELEMETRY:-true}
+        # NORTHDECK: off unless SERVEROS_TELEMETRY=true.
+        SERVEROS_TELEMETRY: ${SERVEROS_TELEMETRY:-false}
     volumes:
         - storage:/app/storage
     depends_on:

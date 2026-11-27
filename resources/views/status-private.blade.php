@@ -24,7 +24,7 @@
 <body>
     <main>
         <h1>This status page is private</h1>
-        <p>Only members of {{ $workspace }} can see it. If you run it, you can make it public in ServerOS, under Status page.</p>
+        <p>Only members of {{ $workspace }} can see it. If you run it, you can make it public in {{ config('app.name') }}, under Status page.</p>{{-- NORTHDECK --}}
         <a class="button" href="{{ $signIn }}">Sign in to view</a>
     </main>
 </body>
