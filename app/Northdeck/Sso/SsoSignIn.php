@@ -9,6 +9,7 @@ use App\Models\AccountEvent;
 use App\Models\Activity;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Northdeck\Admin\SignUpPolicy;
 use App\Northdeck\Roles\RoleMapping;
 use App\Northdeck\Sso\Models\SsoConnection;
 use App\Northdeck\Sso\Models\SsoGroupMapping;
@@ -82,6 +83,9 @@ final class SsoSignIn
 
         if (! $connection->jit) {
             return $refuse('There’s no account for '.$claims->email.' yet. Ask a workspace admin to invite you.');
+        }
+        if (! SignUpPolicy::ssoMayCreate($claims->email)) {
+            return $refuse('There’s no account for '.$claims->email.', and this panel doesn’t make new ones through SSO. Ask its admin for an invite.');
         }
 
         return ['action' => 'create', 'reason' => null, 'user_id' => null, 'role' => $role ?? $connection->default_role];

@@ -2,16 +2,19 @@
 
 namespace App\Northdeck\Admin;
 
+use App\Northdeck\NorthdeckServiceProvider;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 /**
- * The panel's name and addresses, as instance admins set them on
- * /admin/panel. A saved value overrides the env value; an empty one goes
- * back to it.
+ * .env settings as instance admins set them on /admin/settings (see
+ * SettingsCatalog). A saved value goes over the .env one; clearing it goes
+ * back. Secrets are stored encrypted and never sent to the browser.
  */
 final class PanelSettings
 {
@@ -19,25 +22,10 @@ final class PanelSettings
 
     private const string CACHE_KEY = 'northdeck.panel_settings';
 
-    /**
-     * Each field, the config keys it sets, and how it's checked.
-     *
-     * @var array<string, array{config: list<string>, rules: list<string>}>
-     */
-    public const array FIELDS = [
-        'name' => ['config' => ['app.name'], 'rules' => ['string', 'max:60']],
-        'support_email' => ['config' => ['northdeck.support.email', 'mail.support.address'], 'rules' => ['email', 'max:254']],
-        'security_email' => ['config' => ['northdeck.support.security_email'], 'rules' => ['email', 'max:254']],
-        'mail_from_address' => ['config' => ['mail.from.address'], 'rules' => ['email', 'max:254']],
-        'mail_from_name' => ['config' => ['mail.from.name'], 'rules' => ['string', 'max:60']],
-        'support_url' => ['config' => ['northdeck.support.url'], 'rules' => ['url:https,http', 'max:2048']],
-        'chat_url' => ['config' => ['northdeck.support.chat_url', 'serveros.brand.discord_url'], 'rules' => ['url:https,http', 'max:2048']],
-    ];
-
-    /** @var array<string, string|null>|null what the env (config files) said, before saved values were applied */
+    /** @var array<string, mixed>|null what the config files (.env) said, before saved values went over them */
     private static ?array $env = null;
 
-    /** @return array<string, string> saved values only */
+    /** @return array<string, string> saved values as stored (secrets still encrypted) */
     public static function saved(): array
     {
         try {
@@ -59,74 +47,127 @@ final class PanelSettings
         }
 
         self::$env ??= self::read($config);
+        $fields = SettingsCatalog::fields();
 
-        foreach (self::saved() as $field => $value) {
-            foreach (self::FIELDS[$field]['config'] ?? [] as $key) {
-                $config->set($key, $value);
+        foreach (self::saved() as $key => $stored) {
+            if (! isset($fields[$key])) {
+                continue;
+            }
+            $value = self::decode($fields[$key], $stored);
+            if ($value === null) {
+                continue;
+            }
+            foreach ($fields[$key]['config'] as $configKey) {
+                $config->set($configKey, $value);
             }
         }
     }
 
     /**
-     * The values a field shows: saved, or what the env says.
+     * Every field with what the browser may see: the saved value, or for a
+     * secret only whether one is saved or set in .env.
      *
-     * @return array<string, array{value: string|null, env: string|null, saved: bool}>
+     * @return list<array<string, mixed>>
      */
-    public static function current(Repository $config): array
+    public static function forPage(Repository $config): array
     {
         $env = self::$env ?? self::read($config);
         $saved = self::saved();
 
-        $out = [];
-        foreach (array_keys(self::FIELDS) as $field) {
-            $out[$field] = [
-                'value' => $saved[$field] ?? $env[$field],
-                'env' => $env[$field],
-                'saved' => isset($saved[$field]),
-            ];
+        $groups = [];
+        foreach (SettingsCatalog::groups() as $group) {
+            $fields = [];
+            foreach ($group['fields'] as $field) {
+                $key = $field['key'];
+                $secret = $field['type'] === 'secret';
+                $fields[] = [
+                    'key' => $key,
+                    'env' => $field['env'],
+                    'label' => $field['label'],
+                    'hint' => $field['hint'],
+                    'type' => $field['type'],
+                    'options' => $field['options'] ?? null,
+                    'saved' => isset($saved[$key]),
+                    'value' => $secret || ! isset($saved[$key]) ? null : self::display(self::decode($field, $saved[$key])),
+                    'envValue' => $secret ? null : self::display($env[$key] ?? null),
+                    'envSet' => filled($env[$key] ?? null),
+                ];
+            }
+            $groups[] = [...array_diff_key($group, ['fields' => true]), 'fields' => $fields];
         }
 
-        return $out;
+        return $groups;
+    }
+
+    /** @return array<string, list<string>> validation rules, by field */
+    public static function rules(): array
+    {
+        $rules = [];
+        foreach (SettingsCatalog::fields() as $key => $field) {
+            $rules[$key] = ['nullable', ...match ($field['type']) {
+                'email' => ['email', 'max:254'],
+                'url' => ['url:https,http', 'max:2048'],
+                'int' => ['integer', 'min:'.($field['min'] ?? 0), 'max:'.($field['max'] ?? PHP_INT_MAX)],
+                'bool' => ['in:on,off'],
+                'select' => ['in:'.implode(',', array_keys($field['options'] ?? []))],
+                'list' => ['string', 'max:2000', 'regex:/^[a-z0-9.,@\s-]*$/i'],
+                'secret' => ['string', 'max:4096'],
+                default => ['string', ...($field['rules'] ?? ['max:255'])],
+            }];
+        }
+
+        return $rules;
     }
 
     /**
-     * Saves the values; null or '' clears a field back to the env.
+     * Saves what was sent. An empty value goes back to .env; for a secret,
+     * an empty value leaves it alone and `clear` lists the ones to remove.
      *
-     * @param  array<string, string|null>  $values
+     * @param  array<string, mixed>  $values
+     * @param  list<string>  $clear  secrets to go back to .env
      * @return list<string> the fields that changed
      */
-    public static function save(array $values): array
+    public static function save(array $values, array $clear = []): array
     {
         $before = self::saved();
+        $fields = SettingsCatalog::fields();
         $changed = [];
 
-        foreach (array_keys(self::FIELDS) as $field) {
-            if (! array_key_exists($field, $values)) {
+        foreach ($fields as $key => $field) {
+            $secret = $field['type'] === 'secret';
+            if ($secret && in_array($key, $clear, true)) {
+                $new = null;
+            } elseif (! array_key_exists($key, $values)) {
                 continue;
-            }
-            $value = trim((string) $values[$field]);
-            $value = $value === '' ? null : $value;
-            if (($before[$field] ?? null) === $value) {
-                continue;
-            }
-            $changed[] = $field;
-            if ($value === null) {
-                DB::table(self::TABLE)->where('key', $field)->delete();
             } else {
-                DB::table(self::TABLE)->updateOrInsert(['key' => $field], ['value' => $value, 'updated_at' => now(), 'created_at' => now()]);
+                $new = self::encode($field, $values[$key]);
+                if ($secret && $new === null) {
+                    continue; // blank secret: unchanged
+                }
+            }
+
+            $old = $before[$key] ?? null;
+            $same = $secret && $old !== null && $new !== null
+                ? self::decode($field, $old) === self::decode($field, $new)
+                : $old === $new;
+            if ($same) {
+                continue;
+            }
+
+            $changed[] = $key;
+            if ($new === null) {
+                DB::table(self::TABLE)->where('key', $key)->delete();
+            } else {
+                DB::table(self::TABLE)->updateOrInsert(['key' => $key], ['value' => $new, 'updated_at' => now(), 'created_at' => now()]);
             }
         }
 
         if ($changed !== []) {
             self::forget();
-            // The rest of this request (and the page it renders) sees the change.
-            $config = app('config');
-            foreach ($changed as $field) {
-                $value = self::saved()[$field] ?? (self::$env ?? self::read($config))[$field];
-                foreach (self::FIELDS[$field]['config'] as $key) {
-                    $config->set($key, $value);
-                }
-            }
+            self::refresh(app('config'), $changed);
+            // Queue workers read config once when they start; this makes them
+            // start again with the new values.
+            rescue(fn () => Artisan::call('queue:restart'), report: false);
         }
 
         return $changed;
@@ -144,13 +185,85 @@ final class PanelSettings
         self::forget();
     }
 
-    /** @return array<string, string|null> */
+    /**
+     * The rest of this request (and the page it renders) sees the change.
+     *
+     * @param  list<string>  $changed
+     */
+    private static function refresh(Repository $config, array $changed): void
+    {
+        $env = self::$env ?? self::read($config);
+        self::$env = $env;
+        $fields = SettingsCatalog::fields();
+        $saved = self::saved();
+
+        foreach ($changed as $key) {
+            $value = isset($saved[$key]) ? self::decode($fields[$key], $saved[$key]) : ($env[$key] ?? null);
+            foreach ($fields[$key]['config'] as $configKey) {
+                $config->set($configKey, $value);
+            }
+        }
+
+        NorthdeckServiceProvider::applyDefaults($config);
+    }
+
+    /** @param  array{type: string}  $field */
+    private static function encode(array $field, mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        $value = trim((string) (is_scalar($value) ? $value : ''));
+        if ($value === '') {
+            return null;
+        }
+
+        return match ($field['type']) {
+            'secret' => Crypt::encryptString($value),
+            'list' => implode(',', self::domains($value)) ?: null,
+            'bool' => $value === 'on' ? '1' : '0',
+            default => $value,
+        };
+    }
+
+    /** @param  array{type: string}  $field */
+    private static function decode(array $field, string $stored): mixed
+    {
+        return match ($field['type']) {
+            'secret' => rescue(fn () => Crypt::decryptString($stored), null, false),
+            'list' => self::domains($stored),
+            'bool' => $stored === '1',
+            'int' => (int) $stored,
+            default => $stored,
+        };
+    }
+
+    /** @return list<string> */
+    public static function domains(string $value): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            fn ($d) => ltrim(strtolower(trim($d)), '@'),
+            preg_split('/[\s,]+/', $value) ?: [],
+        ))));
+    }
+
+    private static function display(mixed $value): ?string
+    {
+        return match (true) {
+            $value === null || $value === '' || $value === [] => null,
+            is_bool($value) => $value ? 'on' : 'off',
+            is_array($value) => implode(', ', array_map(fn ($v) => is_scalar($v) ? (string) $v : '', $value)),
+            is_scalar($value) => (string) $value,
+            default => null,
+        };
+    }
+
+    /** @return array<string, mixed> */
     private static function read(Repository $config): array
     {
         $values = [];
-        foreach (self::FIELDS as $field => $spec) {
-            $value = $config->get($spec['config'][0]);
-            $values[$field] = is_string($value) && $value !== '' ? $value : null;
+        foreach (SettingsCatalog::fields() as $key => $field) {
+            $values[$key] = $config->get($field['config'][0]);
         }
 
         return $values;

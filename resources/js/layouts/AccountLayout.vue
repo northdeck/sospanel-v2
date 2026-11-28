@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import NorthdeckLogo from '@/northdeck/components/NorthdeckLogo.vue'; // NORTHDECK
 import { usePage } from '@inertiajs/vue3';
 import { Search } from '@lucide/vue';
 import { ref } from 'vue';
@@ -33,14 +34,8 @@ const focusRing =
                 class="flex min-w-0 items-center gap-2.25 rounded-md"
                 :class="focusRing"
             >
-                <img
-                    src="/images/landing/serveros-logo.svg"
-                    alt=""
-                    class="size-4.5 shrink-0 object-contain invert dark:invert-0"
-                />
-                <span class="text-[15px]/4.5 font-semibold tracking-[-0.01em]">
-                    {{ ' ' + $t('ServerOS') + ' ' }}
-                </span>
+                <!-- NORTHDECK: the Northdeck wordmark -->
+                <NorthdeckLogo :height="20" />
             </a>
 
             <button

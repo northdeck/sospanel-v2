@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import NorthdeckMark from '@/northdeck/components/NorthdeckMark.vue'; // NORTHDECK
 import { Link, usePage } from '@inertiajs/vue3';
 import { Check, SquareTerminal, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref } from 'vue';
@@ -103,11 +104,7 @@ const words = computed(() =>
             >
                 <span class="flex" aria-hidden="true">
                     <span :class="mark">
-                        <img
-                            src="/images/landing/serveros-logo.svg"
-                            alt=""
-                            class="size-3.5 object-contain"
-                        />
+                        <NorthdeckMark class="size-3.5 text-white" />
                     </span>
                     <span :class="[mark, '-ml-1.5']">
                         <AiBrandIcon

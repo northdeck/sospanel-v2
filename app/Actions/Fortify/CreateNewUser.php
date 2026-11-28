@@ -54,7 +54,7 @@ class CreateNewUser implements CreatesNewUsers
         ])->validate();
 
         if (! SignUps::allows($input['email'])) {
-            throw ValidationException::withMessages(['email' => SignUps::CLOSED]);
+            throw ValidationException::withMessages(['email' => SignUps::closedFor($input['email'])]); // NORTHDECK: says why
         }
 
         $token = $input['cf-turnstile-response'] ?? null;

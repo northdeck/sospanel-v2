@@ -25,7 +25,8 @@ Everything here is specific to Northdeck and isn't in upstream ServerOS.
 
 - **Single sign-on**: OpenID Connect and SAML 2.0 with any identity provider, with presets for Google Workspace, Microsoft Entra ID, Okta, OneLogin, JumpCloud, Keycloak, authentik, Auth0 and generic SAML (ADFS and others). Email-domain routing, JIT accounts, group to role mapping, Require SSO with break-glass for owners and admins, single logout, and an optional connection for the whole install. Settings › Single sign-on; setup steps in [docs/sso.md](docs/sso.md).
 - **Custom roles**: workspaces can make their own roles with exactly the permissions they pick (Settings › Members), and SSO and SCIM groups can map to them. On unless `NORTHDECK_CUSTOM_ROLES=false`.
-- **Admin pages**: `/admin` for instance admins, with **Users** (search everyone, change names and emails, make people admins) and **Panel settings** (the panel's name, the send-from, support and security addresses, and help links, saved over the `.env` values). Make the first admin with `php artisan admin:grant you@example.com`; admins need a verified email and two-factor on. Off with `NORTHDECK_ADMIN=false`. See [docs/admin.md](docs/admin.md).
+- **Admin pages**: `/admin` for instance admins. **Users**: search everyone, change names and emails, make people admins, and invite people on any domain, even with sign-up off. **Settings**: change the `.env` settings that can change while the panel runs (name, email and SMTP, support links, sign-in with GitHub and Google, Turnstile, features, update feeds), saved over the `.env` values, secrets encrypted.
+- **Sign-up rules**: open, only certain email domains, invite only, or off, plus blocked domains; SSO and SCIM can be stopped from making accounts. Set on **/admin › Settings › New accounts** or with `NORTHDECK_SIGN_UPS`. Make the first admin with `php artisan admin:grant you@example.com`; admins need a verified email and two-factor on. Off with `NORTHDECK_ADMIN=false`. See [docs/admin.md](docs/admin.md).
 - **Branding**: Northdeck name, logo, icons and colors on the sign-in pages, the app header and sidebar, emails and status pages. The logo follows the light or dark theme. Assets are in `public/northdeck/`, colors in `resources/js/northdeck/theme.css`.
 - **Support and docs**: support, source and issue links point to Northdeck (`NORTHDECK_SUPPORT_*`), and the Help page has a Northdeck support row. Upstream's "donate or buy a license" prompt is hidden.
 - **Telemetry**: the anonymous daily ping to serveros.com is off unless `SERVEROS_TELEMETRY=true` (see [Self-hosting](#self-hosting)).
@@ -35,7 +36,8 @@ Everything here is specific to Northdeck and isn't in upstream ServerOS.
     - SSO adds `require_sso` to `workspaces` when it isn't there, and four `northdeck_sso_*` tables (migration `2027_01_10_000000_create_northdeck_sso_tables`).
     - `.env.example` and `docker/self-hosted/compose.yaml` default `APP_NAME` to "Northdeck Panel".
     - SCIM 2.0 provisioning, as a preview behind `NORTHDECK_SCIM=true` ([docs/sso.md](docs/sso.md#scim-provisioning)).
-    - The admin pages add a `northdeck_panel_settings` table (migration `2027_01_20_000000_create_northdeck_panel_settings_table`).
+    - The admin pages add `northdeck_panel_settings` and `northdeck_panel_invites` tables (migrations `2027_01_20_000000_*` and `2027_01_25_000000_*`).
+    - Sign-up hooks into upstream's `SignUps` (marked `NORTHDECK:`), so the same rules cover password sign-up and GitHub/Google sign-in.
     - Page titles and the admin sidebar use the panel name from the server, so a name saved on **Panel settings** shows without a rebuild.
 
 ### Where Northdeck's code lives

@@ -48,6 +48,7 @@ defineProps<{
     oauthProviders: string[];
     googleClientId?: string | null;
     lastUsed?: 'password' | 'passkey' | 'google' | 'github' | 'sso' | null;
+    northdeckSignUpOff?: boolean; // NORTHDECK: hides "Create an account"
 }>();
 
 const local = ref<{ email?: string; password?: string }>({});
@@ -203,7 +204,11 @@ function clear(field: 'email' | 'password'): void {
             </button>
         </div>
 
-        <div class="text-center text-[14px]/5 text-(--ds-text-muted)">
+        <!-- NORTHDECK: hidden when sign-up is off -->
+        <div
+            v-if="!northdeckSignUpOff"
+            class="text-center text-[14px]/5 text-(--ds-text-muted)"
+        >
             {{ ' ' + $t('New to ServerOS?') }}
             <TextLink :href="register()" :tabindex="5">{{
                 $t('Create an account')

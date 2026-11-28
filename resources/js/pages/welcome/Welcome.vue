@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import NorthdeckLogo from '@/northdeck/components/NorthdeckLogo.vue'; // NORTHDECK
 import { Head, router } from '@inertiajs/vue3';
 import { ArrowRight, Check, Copy, LockKeyhole } from '@lucide/vue';
 import { trans } from 'laravel-vue-i18n';
@@ -601,15 +602,8 @@ onBeforeUnmount(() =>
                 <span
                     class="mx-auto mb-7 flex w-fit items-center gap-2.5 text-white"
                 >
-                    <img
-                        src="/images/landing/serveros-logo.svg"
-                        alt=""
-                        class="size-[22px] object-contain"
-                    />
-                    <span
-                        class="text-[19px]/6 font-semibold tracking-[-0.025em]"
-                        >ServerOS</span
-                    >
+                    <!-- NORTHDECK: the Northdeck wordmark -->
+                    <NorthdeckLogo :height="26" on="dark" />
                 </span>
                 <div
                     class="ds-modal workspace-panel overflow-hidden rounded-[12px]! p-8 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_2px_4px_rgb(0_0_0/0.04),0_24px_48px_-16px_rgb(2_16_56/0.35)]!"

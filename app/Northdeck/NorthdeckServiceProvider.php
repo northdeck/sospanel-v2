@@ -2,9 +2,12 @@
 
 namespace App\Northdeck;
 
+use App\Models\User;
 use App\Models\Workspace;
 use App\Northdeck\Admin\AdminArea;
+use App\Northdeck\Admin\PanelInvite;
 use App\Northdeck\Admin\PanelSettings;
+use App\Northdeck\Admin\SignUpPolicy;
 use App\Northdeck\Sso\Http\Middleware\RefusePasswordWhenSsoRequired;
 use App\Northdeck\Sso\Http\Middleware\RequireWorkspaceSso;
 use App\Northdeck\Sso\InstanceConnection;
@@ -49,6 +52,9 @@ final class NorthdeckServiceProvider extends ServiceProvider
         $extensions = $this->app->make(Extensions::class);
         AdminArea::register($extensions);
 
+        // An admin invite is used once its email has an account.
+        User::created(fn (User $user) => rescue(fn () => PanelInvite::accept($user), report: false));
+
         $extensions->routes(Extensions::SIGN_IN, Routes::signIn(...));
         $extensions->routes(Extensions::WORKSPACE, Routes::workspace(...));
         $extensions->routes(Extensions::API, Routes::api(...));
@@ -76,6 +82,9 @@ final class NorthdeckServiceProvider extends ServiceProvider
             .'<meta property="og:site_name" content="'.e((string) config('app.name')).'">'
             .'<meta name="twitter:card" content="summary_large_image">');
 
+        // With sign-up off, the sign-in page drops "Create an account".
+        $extensions->addPageProps('auth/Login', fn () => SignUpPolicy::mode() === 'off' ? ['northdeckSignUpOff' => true] : []);
+
         // The sign-in page asks whether to show "Sign in with SSO".
         $extensions->addSharedProps(fn (Request $request) => [
             'northdeck' => [
@@ -99,6 +108,9 @@ final class NorthdeckServiceProvider extends ServiceProvider
      */
     public static function applyDefaults(Repository $config): void
     {
+        // Upstream's own switch: open, or closed for every other mode
+        // (SignUpPolicy adds Northdeck's rules on top).
+        $config->set('serveros.sign_ups', $config->get('northdeck.signups.mode') === 'open' ? 'open' : 'closed');
 
         if (filled($email = $config->get('northdeck.support.email'))) {
             $config->set('mail.support.address', $email);

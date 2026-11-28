@@ -5,12 +5,19 @@ namespace App\Support\Auth;
 use App\Models\User;
 use App\Models\WorkspaceEmailDomain;
 use App\Models\WorkspaceInvitation;
+use App\Northdeck\Admin\SignUpPolicy;
 use App\Support\Edition;
 use Illuminate\Support\Str;
 
 final class SignUps
 {
     public const string CLOSED = 'This panel is invite only. Ask its owner to invite you, then sign up with the email the invite went to.';
+
+    // NORTHDECK: why an email was turned away, when Northdeck's rules say more than CLOSED.
+    public static function closedFor(string $email): string
+    {
+        return SignUpPolicy::refusal($email) ?? self::CLOSED;
+    }
 
     public static function open(): bool
     {
@@ -21,6 +28,11 @@ final class SignUps
 
     public static function allows(string $email, ?string $googleDomain = null): bool
     {
+        // NORTHDECK: admin invites, blocked and allowed domains, sign-up off.
+        if (($northdeck = SignUpPolicy::decide($email)) !== null) {
+            return $northdeck;
+        }
+
         if (self::open()) {
             return true;
         }

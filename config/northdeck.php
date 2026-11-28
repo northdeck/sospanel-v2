@@ -77,6 +77,23 @@ return [
         ],
     ],
 
+    'signups' => [
+        // Who can make an account: open (anyone), domains (only emails on
+        // `domains`), invite (people with an invite; upstream's "closed") or
+        // off (only people an instance admin invites). Defaults to upstream's
+        // SERVEROS_SIGN_UPS. Admins can change all of these on /admin/settings.
+        'mode' => env('NORTHDECK_SIGN_UPS') ?: (env('SERVEROS_SIGN_UPS', 'closed') === 'open' ? 'open' : 'invite'),
+        // Comma-separated, e.g. "acme.com, acme.co.uk".
+        'domains' => array_values(array_filter(array_map('trim', explode(',', (string) env('NORTHDECK_SIGN_UP_DOMAINS', ''))))),
+        // Never get a new account, whatever the mode (an admin invite still works).
+        'blocked_domains' => array_values(array_filter(array_map('trim', explode(',', (string) env('NORTHDECK_BLOCKED_DOMAINS', ''))))),
+        // Whether SSO and SCIM may make new accounts. They still follow the
+        // blocked domains.
+        'sso' => (bool) env('NORTHDECK_SSO_CREATES_ACCOUNTS', true),
+        // Days an admin invite lasts.
+        'invite_days' => (int) env('NORTHDECK_INVITE_DAYS', 14),
+    ],
+
     'roles' => [
         // Workspace roles with hand-picked permissions (Settings › Members).
         // Upstream sells these; Northdeck's build has them on.

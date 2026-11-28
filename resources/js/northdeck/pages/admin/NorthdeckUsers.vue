@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { trans } from 'laravel-vue-i18n';
 import { ref, watch } from 'vue';
 import DashCheckbox from '@/components/dash/DashCheckbox.vue';
 import DashSwitch from '@/components/dash/DashSwitch.vue';
@@ -47,7 +48,59 @@ const props = defineProps<{
     };
     search: string;
     me: number | null;
+    invites: {
+        id: number;
+        email: string;
+        workspace: string | null;
+        invitedBy: string | null;
+        expiresAt: string;
+        status: 'pending' | 'expired' | 'accepted';
+    }[];
+    workspaces: { id: number; name: string }[];
+    roles: { value: string; label: string }[];
+    signUps: { mode: string; domains: string[] };
 }>();
+
+const inviting = ref(false);
+const invite = useForm<{
+    email: string;
+    workspace_id: number | null;
+    role: string;
+}>({ email: '', workspace_id: null, role: 'member' });
+
+function startInvite(): void {
+    invite.reset();
+    invite.clearErrors();
+    inviting.value = true;
+}
+
+function sendInvite(): void {
+    invite.post('/admin/invites', {
+        preserveScroll: true,
+        onSuccess: () => {
+            inviting.value = false;
+            invite.reset();
+        },
+    });
+}
+
+function resend(id: number): void {
+    router.post(`/admin/invites/${id}/resend`, {}, { preserveScroll: true });
+}
+
+function revoke(id: number, email: string): void {
+    if (!window.confirm(trans('Cancel the invite to :email?', { email }))) {
+        return;
+    }
+    router.delete(`/admin/invites/${id}`, { preserveScroll: true });
+}
+
+const modeText: Record<string, string> = {
+    open: 'Anyone can sign up.',
+    domains: 'Only emails on the allowed domains can sign up.',
+    invite: 'Only people with an invite can sign up.',
+    off: 'Sign-up is off: only people you invite get in.',
+};
 
 const query = ref(props.search);
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -118,6 +171,72 @@ const date = (iso: string | null): string =>
             <span class="text-[13px]/5 text-(--ds-text-muted)">
                 {{ $t(':count people', { count: String(users.total) }) }}
             </span>
+            <span class="grow" />
+            <AppButton variant="primary" size="sm" @click="startInvite">{{
+                $t('Invite someone')
+            }}</AppButton>
+        </div>
+        <p class="px-6 pb-3 text-[13px]/5 text-(--ds-text-muted)">
+            {{ $t(modeText[signUps.mode] ?? '') }}
+            <template
+                v-if="signUps.mode === 'domains' && signUps.domains.length"
+            >
+                ({{ signUps.domains.map((d) => '@' + d).join(', ') }})
+            </template>
+            {{ $t('Invites work whatever this is set to.') }}
+            <Link href="/admin/settings" class="underline underline-offset-4">{{
+                $t('Change it')
+            }}</Link>
+        </p>
+
+        <div v-if="invites.length" class="px-6 pb-5">
+            <h2 class="pb-2 text-[13px]/5 font-medium">
+                {{ $t('Invites') }}
+            </h2>
+            <ul
+                class="divide-y divide-(--ds-divider) rounded-[10px] border border-(--ds-border)"
+            >
+                <li
+                    v-for="inv in invites"
+                    :key="inv.id"
+                    class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-[13px]/5"
+                >
+                    <span class="font-medium">{{ inv.email }}</span>
+                    <span v-if="inv.workspace" class="text-(--ds-text-muted)">{{
+                        $t('to :workspace', { workspace: inv.workspace })
+                    }}</span>
+                    <span
+                        class="rounded-[4px] px-1.5 text-[11px]/5"
+                        :class="
+                            inv.status === 'expired'
+                                ? 'bg-(--ds-amber)/10 text-(--ds-amber)'
+                                : 'bg-(--ds-hover) text-(--ds-text-muted)'
+                        "
+                        >{{
+                            inv.status === 'expired'
+                                ? $t('Expired')
+                                : $t('Until :date', {
+                                      date: date(inv.expiresAt),
+                                  })
+                        }}</span
+                    >
+                    <span class="grow" />
+                    <button
+                        type="button"
+                        class="cursor-pointer text-(--ds-text-muted) underline-offset-4 hover:underline"
+                        @click="resend(inv.id)"
+                    >
+                        {{ $t('Send again') }}
+                    </button>
+                    <button
+                        type="button"
+                        class="cursor-pointer text-(--ds-red) underline-offset-4 hover:underline"
+                        @click="revoke(inv.id, inv.email)"
+                    >
+                        {{ $t('Cancel') }}
+                    </button>
+                </li>
+            </ul>
         </div>
 
         <DashTable class="border-t-[0.5px] border-edge-tabs">
@@ -234,6 +353,88 @@ const date = (iso: string | null): string =>
             </span>
         </div>
     </div>
+
+    <Dialog v-model:open="inviting">
+        <DialogContent class="sm:max-w-md">
+            <form class="flex flex-col gap-5" @submit.prevent="sendInvite">
+                <DialogHeader>
+                    <DialogTitle>{{ $t('Invite someone') }}</DialogTitle>
+                    <DialogDescription>
+                        {{
+                            $t(
+                                'They get an email to make an account. The invite works on any domain, even with sign-up off.',
+                            )
+                        }}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div class="grid gap-2">
+                    <Label for="invite-email">{{ $t('Email') }}</Label>
+                    <Input
+                        id="invite-email"
+                        v-model="invite.email"
+                        type="email"
+                        required
+                        autocomplete="off"
+                        :placeholder="$t('email@example.com')"
+                    />
+                    <InputError :message="invite.errors.email" />
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="invite-workspace">{{
+                        $t('Add them to a workspace')
+                    }}</Label>
+                    <select
+                        id="invite-workspace"
+                        v-model="invite.workspace_id"
+                        class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+                    >
+                        <option :value="null">
+                            {{ $t('No, they make their own') }}
+                        </option>
+                        <option
+                            v-for="w in workspaces"
+                            :key="w.id"
+                            :value="w.id"
+                        >
+                            {{ w.name }}
+                        </option>
+                    </select>
+                    <InputError :message="invite.errors.workspace_id" />
+                </div>
+
+                <div v-if="invite.workspace_id !== null" class="grid gap-2">
+                    <Label for="invite-role">{{ $t('Role') }}</Label>
+                    <select
+                        id="invite-role"
+                        v-model="invite.role"
+                        class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+                    >
+                        <option
+                            v-for="r in roles"
+                            :key="r.value"
+                            :value="r.value"
+                        >
+                            {{ $t(r.label) }}
+                        </option>
+                    </select>
+                </div>
+
+                <DialogFooter>
+                    <AppButton @click="inviting = false">{{
+                        $t('Cancel')
+                    }}</AppButton>
+                    <AppButton
+                        type="submit"
+                        variant="primary"
+                        :disabled="invite.processing"
+                        >{{ $t('Send invite') }}</AppButton
+                    >
+                </DialogFooter>
+            </form>
+        </DialogContent>
+    </Dialog>
 
     <Dialog v-model:open="open">
         <DialogContent class="sm:max-w-md">

@@ -4,7 +4,9 @@ namespace App\Northdeck\Scim;
 
 use App\Http\Controllers\Controller;
 use App\Models\Activity;
+use App\Models\User;
 use App\Models\Workspace;
+use App\Northdeck\Admin\SignUpPolicy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -88,6 +90,10 @@ final class ScimController extends Controller
         $userName = (string) ($body['userName'] ?? $email);
         if (ScimUser::query()->where('workspace_id', $workspace->id)->whereRaw('lower(user_name) = ?', [Str::lower($userName)])->exists()) {
             return Scim::error(409, 'That userName is already provisioned.', 'uniqueness');
+        }
+
+        if (! User::query()->whereRaw('lower(email) = ?', [Str::lower($email)])->exists() && ! SignUpPolicy::ssoMayCreate($email)) {
+            return Scim::error(403, 'This panel doesn’t make new accounts through SCIM for '.$email.'. Ask its admin for an invite.');
         }
 
         $scim = DB::transaction(function () use ($workspace, $body, $email, $userName): ScimUser {
