@@ -122,12 +122,13 @@ class StatusOgImage
         $more = count($components) - self::ROWS;
         $foot = self::fit($address, $medium, 18, $width - 240).($more > 0 ? "  ·  {$more} more ".($more === 1 ? 'service' : 'services') : '');
         imagettftext($image, 18, 0, self::PAD, 598, $muted, $medium, $foot);
-        $mark = resource_path('images/serveros-mark-ink.png');
+        // NORTHDECK: the Northdeck mark (already white and teal) and name.
+        $mark = resource_path('images/northdeck-mark.png');
         if (is_file($mark) && ($logo = imagecreatefrompng($mark)) instanceof GdImage) {
-            imagefilter($logo, IMG_FILTER_NEGATE);
-            $brand = 'ServerOS';
+            $brand = (string) config('northdeck.brand.name', 'Northdeck');
             $x = $right - self::textWidth($brand, $bold, 20);
-            imagecopyresampled($image, $logo, $x - 34, 574, 0, 0, 24, 27, imagesx($logo), imagesy($logo));
+            $markWidth = (int) round(20 * imagesx($logo) / imagesy($logo));
+            imagecopyresampled($image, $logo, $x - $markWidth - 10, 578, 0, 0, $markWidth, 20, imagesx($logo), imagesy($logo));
             imagettftext($image, 20, 0, $x, 598, $text, $bold, $brand);
         }
 

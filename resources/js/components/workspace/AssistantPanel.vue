@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import NorthdeckMark from '@/northdeck/components/NorthdeckMark.vue'; // NORTHDECK
 import { Link, router } from '@inertiajs/vue3';
 import { trans } from 'laravel-vue-i18n';
 import {
@@ -254,11 +255,7 @@ const focusRing =
         <header
             class="flex h-13 shrink-0 items-center gap-2.5 border-b border-(--ds-divider) pr-2 pl-4"
         >
-            <img
-                src="/images/landing/serveros-logo.svg"
-                alt=""
-                class="size-4 shrink-0 object-contain invert dark:invert-0"
-            />
+            <NorthdeckMark class="size-4 shrink-0" />
             <h2 class="grow text-[14px]/5 font-medium">{{ $t('Ask AI') }}</h2>
             <div class="assistant-input flex gap-0.5 rounded-[9px] p-px">
                 <button

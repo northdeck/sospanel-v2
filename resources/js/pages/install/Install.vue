@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import NorthdeckLogo from '@/northdeck/components/NorthdeckLogo.vue'; // NORTHDECK
 import { Head } from '@inertiajs/vue3';
 import { trans } from 'laravel-vue-i18n';
 import { computed } from 'vue';
-import serverosMark from '@/components/dash/assets/serveros-mark.svg?raw';
 import DashTray from '@/components/dash/DashTray.vue';
 import FilledIcon from '@/components/icons/FilledIcon.vue';
 import type { FilledIconName } from '@/components/icons/filledIcons';
@@ -67,16 +67,8 @@ const header = computed(() =>
         <main
             class="flex grow flex-col items-center justify-center gap-[22px] px-4 py-12"
         >
-            <span class="flex items-center gap-2.5 text-fg-primary">
-                <span
-                    class="flex h-5 w-[17.7px] shrink-0 [&>svg]:size-full"
-                    aria-hidden="true"
-                    v-html="serverosMark"
-                />
-                <span class="text-[17px]/5 font-semibold tracking-[-0.02em]"
-                    >ServerOS</span
-                >
-            </span>
+            <!-- NORTHDECK: the Northdeck wordmark -->
+            <NorthdeckLogo :height="22" />
 
             <DashTray
                 :icon="header.icon"

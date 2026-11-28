@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import NorthdeckLogo from '@/northdeck/components/NorthdeckLogo.vue'; // NORTHDECK
 import { Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import BrandLogo from '@/components/dash/BrandLogo.vue';
 import DashButton from '@/components/dash/DashButton.vue';
-import serverosMark from '@/components/dash/assets/serveros-mark.svg?raw';
 import ViewingAsFrame from '@/layouts/ViewingAsFrame.vue';
 import { onWorkspace } from '@/lib/workspaceRoute';
 import linkRoutes from '@/routes/workspace/integrations/slack/link';
@@ -52,15 +52,8 @@ function link(): void {
         class="flex min-h-svh flex-col items-center justify-center gap-7 bg-surface-main px-4 py-10 font-ui text-fg-primary"
     >
         <div class="flex items-center gap-2.5">
-            <span
-                class="flex h-[18px] w-[15.93px] shrink-0 text-fg-primary"
-                aria-hidden="true"
-                v-html="serverosMark"
-            />
-            <span
-                class="text-[15px]/5 font-medium tracking-[-0.005em] text-fg-primary"
-                >ServerOS</span
-            >
+            <!-- NORTHDECK: the Northdeck wordmark -->
+            <NorthdeckLogo :height="20" />
         </div>
 
         <section

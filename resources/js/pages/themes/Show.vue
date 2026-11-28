@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import NorthdeckMark from '@/northdeck/components/NorthdeckMark.vue'; // NORTHDECK
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import { trans } from 'laravel-vue-i18n';
 import { computed, ref } from 'vue';
@@ -79,11 +80,7 @@ function download(): void {
                 href="/"
                 class="flex items-center gap-2 rounded-[6px] text-[14px] font-semibold focus-visible:outline-2 focus-visible:outline-(--ds-ring)"
             >
-                <img
-                    src="/images/landing/serveros-logo.svg"
-                    alt=""
-                    class="size-[18px] object-contain invert dark:invert-0"
-                />
+                <NorthdeckMark class="size-[18px]" />
                 {{ appName }}
             </a>
         </header>

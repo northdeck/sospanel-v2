@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import NorthdeckMark from '@/northdeck/components/NorthdeckMark.vue'; // NORTHDECK
 import { trans } from 'laravel-vue-i18n';
 import { Link, usePage } from '@inertiajs/vue3';
 import {
@@ -159,11 +160,7 @@ const iconButton = `flex size-7 shrink-0 cursor-pointer items-center justify-cen
         <template v-if="!collapsed">
             <div class="flex h-8 shrink-0 items-center gap-0.5 pr-0.5 pl-3">
                 <span class="mr-auto flex min-w-0 items-center gap-2">
-                    <img
-                        src="/images/landing/serveros-logo.svg"
-                        alt=""
-                        class="size-[18px] shrink-0 object-contain invert dark:invert-0"
-                    />
+                    <NorthdeckMark class="size-[18px] shrink-0" />
                     <span
                         class="truncate text-[15px]/5 font-semibold tracking-[-0.02em]"
                         >{{ page.props.name }}</span

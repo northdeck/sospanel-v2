@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import NorthdeckMark from '@/northdeck/components/NorthdeckMark.vue'; // NORTHDECK
 import { trans } from 'laravel-vue-i18n';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { ArrowLeftRight } from '@lucide/vue';
@@ -145,11 +146,7 @@ function decide(decision: 'approve' | 'deny'): void {
             <span
                 class="flex size-12 items-center justify-center rounded-[12px] bg-(--ds-field) ring-1 ring-(--ds-border)"
             >
-                <img
-                    src="/images/landing/serveros-logo.svg"
-                    alt=""
-                    class="size-6 dark:invert-0"
-                />
+                <NorthdeckMark class="size-6" />
             </span>
         </div>
 

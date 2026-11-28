@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import NorthdeckLogo from '@/northdeck/components/NorthdeckLogo.vue'; // NORTHDECK
 import { trans } from 'laravel-vue-i18n';
 import { Head } from '@inertiajs/vue3';
 import { ArrowLeft, RotateCw } from '@lucide/vue';
@@ -93,14 +94,8 @@ function back(): void {
                 :href="site"
                 class="flex items-center gap-2.5 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
-                <img
-                    src="/images/landing/serveros-logo.svg"
-                    alt=""
-                    class="size-[22px] object-contain"
-                />
-                <span class="text-[17px] font-semibold tracking-[-0.025em]">
-                    ServerOS
-                </span>
+                <!-- NORTHDECK: the Northdeck wordmark -->
+                <NorthdeckLogo :height="24" on="dark" />
             </a>
         </header>
 

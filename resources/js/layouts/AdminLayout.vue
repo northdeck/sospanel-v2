@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import NorthdeckMark from '@/northdeck/components/NorthdeckMark.vue'; // NORTHDECK
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, Search } from '@lucide/vue';
 import {
@@ -178,11 +179,7 @@ const focusRing =
         <aside class="shrink-0 lg:w-52">
             <div class="flex h-full flex-col px-2.5 py-3">
                 <div class="mb-2 flex h-9 items-center gap-2.25 px-2.5">
-                    <img
-                        src="/images/landing/serveros-logo.svg"
-                        alt=""
-                        class="size-4 shrink-0 object-contain invert dark:invert-0"
-                    />
+                    <NorthdeckMark class="size-4 shrink-0" />
                     <!-- NORTHDECK: the panel's name, not ServerOS -->
                     <span
                         class="text-[14px]/4 font-semibold tracking-[-0.01em]"

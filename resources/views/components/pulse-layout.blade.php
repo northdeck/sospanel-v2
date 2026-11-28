@@ -39,7 +39,8 @@
                                 <span style="font-size: 13px">Admin</span>
                             </a>
                             <span style="width: 1px; height: 18px; background: var(--ds-border)" aria-hidden="true"></span>
-                            <img src="/images/landing/serveros-logo.svg" alt="" class="pulse-logo" style="height: 18px; width: auto">
+                            {{-- NORTHDECK: the Northdeck mark; the "n" follows the text colour --}}
+                            <svg viewBox="8 8 92 84" aria-hidden="true" style="height: 18px; width: auto; color: var(--ds-text)"><path fill="currentColor" d="M8 30h15v8.5C28 31.8 35.4 28 44.3 28 59.6 28 68 37.9 68 54.6V92H52.6V57.3c0-9.7-4.6-15.4-13-15.4-9.4 0-16.6 6.9-16.6 18V92H8Z"/><path fill="#5eead4" d="M86 8l14 24H72Z"/></svg>
                             <span style="font-size: 17px; font-weight: 550; color: var(--ds-text)">Pulse</span>
                         </div>
                         @php($period = request()->query('period', '1_hour'))
