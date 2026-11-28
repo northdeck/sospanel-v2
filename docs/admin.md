@@ -57,3 +57,38 @@ The `.env` settings that can change while the panel runs, in sections: Panel, Ne
 **Only in .env** lists what can't change here, and why: `APP_KEY`, `APP_URL`/`SERVEROS_DOMAIN`, the database and Redis, session, cache and queue drivers, the daemon gateway and CA, `APP_ENV`/`APP_DEBUG`/logging, and `NORTHDECK_ADMIN`. Change those in `.env` and restart the panel.
 
 `MAIL_FROM_NAME` defaults to `${APP_NAME}` in `.env`, so changing **Name** doesn't change the sender name; set **Sender name** as well if you want both.
+
+## Sending a test email
+
+**Settings › Email › Send a test email** sends one email with the settings saved now, to your address or another. If it can't send, it says why in plain words (wrong password, port blocked, sender refused). With **Send with** set to Log it's written to the log instead.
+
+## Updates
+
+Northdeck's build updates from its own GitHub repository (`NORTHDECK_UPDATE_REPO`, default `northdeck/sospanel-v2`, branch `NORTHDECK_UPDATE_BRANCH`, default `main`), not from upstream's releases.
+
+- Every hour the panel asks GitHub for the newest commit on the branch. **Admin › Updates** shows the commit the panel runs, the newest one, and what's changed in between, with **Check now** and **Update now**.
+- **Auto-update** (`NORTHDECK_AUTO_UPDATE`, on by default) asks for the update by itself at `NORTHDECK_AUTO_UPDATE_HOUR` (default 4, server time; empty means as soon as a commit is found). A commit that failed to install by itself isn't tried again by itself; **Update now** still can. Both are in **Settings › Updates and privacy**.
+- The update itself runs on the server, not in the panel: `serveros-panel updater` (cron, every minute) picks it up, backs up, builds the commit from a clean copy of the repository into your image (`SERVEROS_IMAGE`), and restarts the panel on it. Migrations run as it starts. The panel is down for a few minutes while it builds and restarts.
+- A private repository needs a GitHub token that can read it (`NORTHDECK_UPDATE_TOKEN`) for the panel's check; the server's `git` needs its own access (a deploy key) too.
+
+### Setting it up on the server, once
+
+The server needs `git`, and Northdeck's version of the `serveros-panel` script:
+
+```sh
+sudo apt install -y git
+cd ~/sospanel-v2 && git pull
+sudo install -m 755 docker/self-hosted/serveros-panel /usr/local/bin/serveros-panel
+sudo serveros-panel upgrade
+sudo serveros-panel schedule
+```
+
+`serveros-panel upgrade` builds the branch's newest commit (cloned into `/opt/serveros/source`) and records the commit in the image, so the panel knows what it runs. `schedule` writes the cron that runs the updater every minute. After that, each update installs the script from the commit it builds, so it stays current.
+
+From then on, `sudo serveros-panel upgrade` updates by hand from the server too. Updates happen only while `SERVEROS_IMAGE` is your own image; on upstream's `ghcr.io/serveroshq/panel` the script works as upstream's does.
+
+If you build by hand, pass the commit so the panel knows it:
+
+```sh
+docker build -f docker/self-hosted/Dockerfile --build-arg NORTHDECK_COMMIT=$(git rev-parse HEAD) -t northdeck/sospanel:dev .
+```

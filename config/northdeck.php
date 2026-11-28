@@ -94,6 +94,20 @@ return [
         'invite_days' => (int) env('NORTHDECK_INVITE_DAYS', 14),
     ],
 
+    'updates' => [
+        // Northdeck's build updates from its own repository, not upstream's
+        // releases: the panel checks this branch for new commits, and the
+        // server's updater (serveros-panel) builds and restarts on them.
+        'repo' => env('NORTHDECK_UPDATE_REPO', 'northdeck/sospanel-v2'),
+        'branch' => env('NORTHDECK_UPDATE_BRANCH', 'main'),
+        // Only for a private repository: a GitHub token that can read it.
+        'token' => env('NORTHDECK_UPDATE_TOKEN'),
+        // Update by itself when there's a new commit.
+        'auto' => (bool) env('NORTHDECK_AUTO_UPDATE', true),
+        // The hour (0-23, server time) auto-updates run; empty: as soon as one's found.
+        'auto_hour' => is_numeric($hour = env('NORTHDECK_AUTO_UPDATE_HOUR', 4)) ? (int) $hour : null,
+    ],
+
     'roles' => [
         // Workspace roles with hand-picked permissions (Settings › Members).
         // Upstream sells these; Northdeck's build has them on.

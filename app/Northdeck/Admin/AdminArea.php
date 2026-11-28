@@ -6,6 +6,8 @@ use App\Models\User;
 use App\Northdeck\Admin\Http\EnsureAdminPages;
 use App\Northdeck\Admin\Http\InvitesController;
 use App\Northdeck\Admin\Http\PanelSettingsController;
+use App\Northdeck\Admin\Http\TestEmailController;
+use App\Northdeck\Admin\Http\UpdatesController;
 use App\Northdeck\Admin\Http\UsersController;
 use App\Support\Extensions\AdminNavItem;
 use App\Support\Extensions\Extensions;
@@ -32,6 +34,10 @@ final class AdminArea
             key: 'northdeck-settings', label: 'Settings', icon: 'pen-line', path: '/admin/settings',
             group: 'platform', components: ['admin/NorthdeckSettings'], before: 'pulse', visible: $visible,
         ));
+        $extensions->addAdminNavItem(new AdminNavItem(
+            key: 'northdeck-updates', label: 'Updates', icon: 'circle-arrow-up', path: '/admin/updates',
+            group: 'platform', components: ['admin/NorthdeckUpdates'], after: 'northdeck-settings', visible: $visible,
+        ));
     }
 
     /** Extensions::ADMIN: under /admin, names start with admin. */
@@ -46,6 +52,10 @@ final class AdminArea
         Route::get('settings', [PanelSettingsController::class, 'show'])->name('northdeck.settings');
         Route::put('settings', [PanelSettingsController::class, 'update'])->middleware('throttle:30,1')->name('northdeck.settings.update');
         Route::get('panel', fn () => redirect('/admin/settings'))->name('northdeck.panel');
+        Route::post('settings/test-email', TestEmailController::class)->middleware('throttle:10,1')->name('northdeck.settings.test-email');
+        Route::get('updates', [UpdatesController::class, 'show'])->name('northdeck.updates');
+        Route::post('updates/check', [UpdatesController::class, 'check'])->middleware('throttle:10,1')->name('northdeck.updates.check');
+        Route::post('updates', [UpdatesController::class, 'update'])->middleware('throttle:5,1')->name('northdeck.updates.store');
         // Named admin.users so the panel's own "new signup" links find it.
         Route::get('users', [UsersController::class, 'index'])->name('users');
         Route::put('users/{user}', [UsersController::class, 'update'])->middleware('throttle:60,1')->name('northdeck.users.update');

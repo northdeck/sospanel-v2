@@ -111,11 +111,16 @@ final class SettingsCatalog
             [
                 'key' => 'privacy',
                 'title' => 'Updates and privacy',
-                'description' => 'What the panel checks for and sends out.',
+                'description' => 'Where updates come from, and what the panel sends out.',
                 'icon' => 'update-fill',
                 'fields' => [
+                    ['key' => 'auto_update', 'env' => 'NORTHDECK_AUTO_UPDATE', 'label' => 'Auto-update', 'hint' => 'Update by itself when the repository has a new commit. Backs up first.', 'type' => 'bool', 'config' => ['northdeck.updates.auto']],
+                    ['key' => 'auto_update_hour', 'env' => 'NORTHDECK_AUTO_UPDATE_HOUR', 'label' => 'Auto-update at', 'hint' => 'The hour, 0 to 23 in the server’s time. The panel is down for a few minutes while it updates.', 'type' => 'int', 'config' => ['northdeck.updates.auto_hour'], 'min' => 0, 'max' => 23],
+                    ['key' => 'update_repo', 'env' => 'NORTHDECK_UPDATE_REPO', 'label' => 'Update from', 'hint' => 'The GitHub repository, as owner/name.', 'type' => 'text', 'config' => ['northdeck.updates.repo'], 'rules' => ['max:200', 'regex:#^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$#']],
+                    ['key' => 'update_branch', 'env' => 'NORTHDECK_UPDATE_BRANCH', 'label' => 'Branch', 'hint' => '', 'type' => 'text', 'config' => ['northdeck.updates.branch'], 'rules' => ['max:200', 'regex:#^[A-Za-z0-9_./-]+$#']],
+                    ['key' => 'update_token', 'env' => 'NORTHDECK_UPDATE_TOKEN', 'label' => 'GitHub token', 'hint' => 'Only for a private repository. Stored encrypted.', 'type' => 'secret', 'config' => ['northdeck.updates.token']],
                     ['key' => 'telemetry', 'env' => 'SERVEROS_TELEMETRY', 'label' => 'Daily ping to serveros.com', 'hint' => 'Anonymous: install ID, version and a few counts.', 'type' => 'bool', 'config' => ['northdeck.telemetry']],
-                    ['key' => 'update_feed', 'env' => 'SERVEROS_UPDATE_FEED_URL', 'label' => 'Panel update feed', 'hint' => 'Where the panel looks for new versions. Upstream’s releases don’t fit Northdeck’s build; clear it to stop checking.', 'type' => 'url', 'config' => ['serveros.updates.feed_url']],
+                    ['key' => 'update_feed', 'env' => 'SERVEROS_UPDATE_FEED_URL', 'label' => 'Upstream release feed', 'hint' => 'Where upstream’s updater looks for ServerOS releases. Northdeck’s build updates from the repository above instead.', 'type' => 'url', 'config' => ['serveros.updates.feed_url']],
                     ['key' => 'daemon_feed', 'env' => 'DAEMON_RELEASE_FEED_URL', 'label' => 'Daemon update feed', 'hint' => 'Where the panel looks for new serverosd versions.', 'type' => 'url', 'config' => ['daemon.release_feed_url']],
                 ],
             ],

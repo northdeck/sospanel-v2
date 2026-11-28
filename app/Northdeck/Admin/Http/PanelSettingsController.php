@@ -20,6 +20,7 @@ final class PanelSettingsController extends Controller
     {
         return Inertia::render('admin/NorthdeckSettings', [
             'groups' => PanelSettings::forPage(config()),
+            'adminEmail' => auth()->user()?->email,
             'notManaged' => array_map(
                 fn (string $keys, string $why) => ['keys' => $keys, 'why' => $why],
                 array_keys(SettingsCatalog::NOT_MANAGED),
