@@ -3,9 +3,13 @@
 namespace App\Northdeck\Admin\Http;
 
 use App\Concerns\ProfileValidationRules;
+use App\Enums\WorkspaceRole;
 use App\Http\Controllers\Controller;
 use App\Models\AdminAction;
 use App\Models\User;
+use App\Models\Workspace;
+use App\Northdeck\Admin\PanelInvite;
+use App\Northdeck\Admin\SignUpPolicy;
 use App\Notifications\EmailChanged;
 use App\Rules\UniqueEmail;
 use App\Support\Audit\AuditContext;
@@ -50,6 +54,24 @@ final class UsersController extends Controller
             'users' => $users,
             'search' => $search,
             'me' => $request->user()?->id,
+            'invites' => PanelInvite::query()
+                ->whereNull('accepted_at')
+                ->with(['inviter:id,name', 'workspace:id,name'])
+                ->latest()
+                ->limit(100)
+                ->get()
+                ->map(fn (PanelInvite $invite) => [
+                    'id' => $invite->id,
+                    'email' => $invite->email,
+                    'workspace' => $invite->workspace?->name,
+                    'invitedBy' => $invite->inviter?->name,
+                    'expiresAt' => $invite->expires_at->toIso8601String(),
+                    'status' => $invite->status(),
+                ]),
+            'workspaces' => Workspace::query()->orderBy('name')->limit(500)->get(['id', 'name'])
+                ->map(fn (Workspace $w) => ['id' => $w->id, 'name' => $w->name]),
+            'roles' => array_map(fn (WorkspaceRole $r) => ['value' => $r->value, 'label' => $r->label()], WorkspaceRole::assignable()),
+            'signUps' => SignUpPolicy::forPage(),
         ]);
     }
 

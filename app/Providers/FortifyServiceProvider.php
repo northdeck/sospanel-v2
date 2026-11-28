@@ -12,6 +12,7 @@ use App\Http\Responses\PasswordResetLinkResponse;
 use App\Models\AccountEvent;
 use App\Models\SocialAccount;
 use App\Models\User;
+use App\Northdeck\Admin\SignUpPolicy;
 use App\Support\Auth\SignUps;
 use App\Support\Auth\Turnstile;
 use App\Support\Edition;
@@ -141,6 +142,9 @@ class FortifyServiceProvider extends ServiceProvider
             'turnstileSiteKey' => Turnstile::siteKey(),
             ...(Edition::selfHosted() ? ['selfHosted' => true] : []),
             ...(SignUps::open() ? [] : ['inviteOnly' => true]),
+            // NORTHDECK: the invite link fills in the email; the page says who can sign up.
+            'email' => is_string(request()->query('email')) ? mb_substr((string) request()->query('email'), 0, 254) : null,
+            'northdeckSignUps' => SignUpPolicy::forPage(),
         ]));
 
         Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/TwoFactorChallenge'));

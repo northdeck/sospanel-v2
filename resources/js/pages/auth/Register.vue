@@ -28,6 +28,9 @@ const props = defineProps<{
     turnstileSiteKey: string | null;
     selfHosted?: boolean;
     inviteOnly?: boolean;
+    // NORTHDECK: the invite link's email, and who may sign up
+    email?: string | null;
+    northdeckSignUps?: { mode: string; domains: string[] };
 }>();
 
 defineOptions({
@@ -40,11 +43,27 @@ defineOptions({
 if (props.selfHosted) {
     setLayoutProps({
         title: trans('Create your account'),
-        description: props.inviteOnly
-            ? trans(
-                  'This panel is invite only. Use the email your invite went to.',
-              )
-            : trans('Your own ServerOS panel. No card, no trial.'),
+        // NORTHDECK: say which domains may sign up, or that it's off
+        description:
+            props.northdeckSignUps?.mode === 'domains' &&
+            props.northdeckSignUps.domains.length
+                ? trans(
+                      'New accounts here are for :domains emails, or people with an invite.',
+                      {
+                          domains: props.northdeckSignUps.domains
+                              .map((d) => '@' + d)
+                              .join(', '),
+                      },
+                  )
+                : props.northdeckSignUps?.mode === 'off'
+                  ? trans(
+                        'Sign-up is off. If you were invited, use the email your invite went to.',
+                    )
+                  : props.inviteOnly
+                    ? trans(
+                          'This panel is invite only. Use the email your invite went to.',
+                      )
+                    : trans('Your own ServerOS panel. No card, no trial.'),
     });
 }
 
@@ -155,6 +174,7 @@ function onPassword(event: Event): void {
                     required
                     autocomplete="email"
                     name="email"
+                    :default-value="email ?? undefined"
                     :placeholder="$t('email@example.com')"
                     :aria-invalid="!!(local.email || errors.email)"
                     @input="clear('email')"

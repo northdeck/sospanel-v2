@@ -167,7 +167,7 @@ class SocialLoginController extends Controller
                 return $this->failed('There’s already an account with this email, but its email was never confirmed. Sign in with your password, or reset it, then connect '.$this->label($provider).' from your settings.');
             }
             if ($existing === null && ! SignUps::allows($email, $provider === 'google' ? GoogleTeamAccess::verifiedDomain($account) : null)) {
-                return $this->failed(SignUps::CLOSED);
+                return $this->failed(SignUps::closedFor($email)); // NORTHDECK: says why
             }
 
             $user = DB::transaction(function () use ($existing, $account, $provider, $email): User {
