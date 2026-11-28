@@ -2,12 +2,12 @@
 
 namespace App\Northdeck\Sso\Http\Controllers;
 
-use App\Enums\WorkspaceRole;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\WorkspaceEmailDomainController;
 use App\Models\Activity;
 use App\Models\McpToken;
 use App\Models\Workspace;
+use App\Northdeck\Roles\RoleMapping;
 use App\Northdeck\Scim\ScimToken;
 use App\Northdeck\Sso\Enforcement;
 use App\Northdeck\Sso\InstanceConnection;
@@ -21,6 +21,7 @@ use App\Northdeck\Sso\SsoException;
 use App\Northdeck\Sso\Support\SsoUrls;
 use App\Support\Audit\AuditContext;
 use App\Support\Audit\Audited;
+use App\Support\Workspaces\RoleChoice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -48,6 +49,7 @@ final class SsoSettingsController extends Controller
         $marker = $request->session()->get('northdeck_sso');
 
         return Inertia::render('workspace/settings/Sso', [
+            'workspace' => $workspace->toPageProps(),
             'connections' => SsoConnection::query()
                 ->where('workspace_id', $workspace->id)
                 ->where('is_instance', false)
@@ -59,7 +61,7 @@ final class SsoSettingsController extends Controller
                 ->all(),
             'instance' => $instance !== null && $instance->workspace_id === $workspace->id ? $instance->toPageProps() : null,
             'presets' => Presets::toPageProps(),
-            'roles' => array_map(fn (WorkspaceRole $r) => ['value' => $r->value, 'label' => $r->label()], WorkspaceRole::assignable()),
+            'roles' => RoleMapping::options($workspace),
             'emailDomains' => WorkspaceEmailDomainController::props($workspace),
             'requireSso' => (bool) $workspace->require_sso,
             'requireGoogle' => (bool) $workspace->require_google_sign_in,
@@ -179,22 +181,22 @@ final class SsoSettingsController extends Controller
 
         $data = $request->validate([
             'group' => ['required', 'string', 'max:255'],
-            'role' => ['required', Rule::in(array_map(fn (WorkspaceRole $r) => $r->value, WorkspaceRole::assignable()))],
+            'role' => ['required', 'string', 'max:16'],
         ]);
 
-        $role = WorkspaceRole::from($data['role']);
+        $role = self::roleChoice($workspace, $data['role'], 'role');
         if (! $workspace->canGrant($request->user(), $role->permissions())) {
             throw ValidationException::withMessages(['role' => __('You can’t give a role with more access than your own.')]);
         }
 
         $mapping = SsoGroupMapping::query()->firstOrNew(['connection_id' => $connection->id, 'group' => trim($data['group'])]);
         $existed = $mapping->exists;
-        if ($existed && $mapping->role === $role->value) {
+        if ($existed && $mapping->role === RoleMapping::value($role)) {
             AuditContext::nothingChanged();
 
             return back();
         }
-        $mapping->role = $role->value;
+        $mapping->role = RoleMapping::value($role);
         $mapping->save();
 
         Activity::record($workspace, $existed ? 'sso.role_mapping_update' : 'sso.role_mapping_add', $mapping->group, meta: ['role' => $role->label(), 'connection' => $connection->name]);
@@ -271,7 +273,7 @@ final class SsoSettingsController extends Controller
             'enabled' => ['boolean'],
             'jit' => ['boolean'],
             'single_logout' => ['boolean'],
-            'default_role' => ['required', Rule::in(array_map(fn (WorkspaceRole $r) => $r->value, WorkspaceRole::assignable()))],
+            'default_role' => ['required', 'string', 'max:16'],
             'domain_ids' => ['array'],
             'domain_ids.*' => ['integer', Rule::exists('workspace_email_domains', 'id')->where('workspace_id', $workspace->id)],
             'settings' => ['array'],
@@ -283,10 +285,11 @@ final class SsoSettingsController extends Controller
             'allow_idp_initiated' => ['boolean'],
         ]);
 
-        $role = WorkspaceRole::from($data['default_role']);
+        $role = self::roleChoice($workspace, $data['default_role'], 'default_role');
         if (! $workspace->canGrant($request->user(), $role->permissions())) {
             throw ValidationException::withMessages(['default_role' => __('You can’t give a role with more access than your own.')]);
         }
+        $data['default_role'] = RoleMapping::value($role);
 
         $fields = $protocol === SsoConnection::SAML ? self::SAML_FIELDS : self::OIDC_FIELDS;
         $settings = array_map(fn ($v) => trim((string) $v), Arr::only((array) ($data['settings'] ?? []), $fields));
@@ -372,5 +375,15 @@ final class SsoSettingsController extends Controller
     {
         Gate::authorize('manageSettings', $workspace);
         abort_unless($workspace->hasSso() && $connection->workspace_id === $workspace->id && ! $connection->is_instance, 404);
+    }
+
+    private static function roleChoice(Workspace $workspace, string $value, string $field): RoleChoice
+    {
+        $choice = RoleChoice::parse($workspace, $value);
+        if (is_string($choice)) {
+            throw ValidationException::withMessages([$field => __($choice)]);
+        }
+
+        return $choice;
     }
 }

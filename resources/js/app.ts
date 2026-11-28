@@ -64,12 +64,19 @@ function pickLayout(
 
 void createInertiaApp({
     resolve: resolvePanelPage,
-    title: (title, page) =>
-        !title
-            ? appName
+    // NORTHDECK: the name admins set on /admin/panel, not only the build's.
+    title: (title, page) => {
+        const name =
+            typeof page?.props.name === 'string' && page.props.name !== ''
+                ? page.props.name
+                : appName;
+
+        return !title
+            ? name
             : page?.props.pageTitle && page.component === 'status/Show'
               ? title
-              : `${title} - ${appName}`,
+              : `${title} - ${name}`;
+    },
     layout: (name, page) => {
         const layout = pickLayout(name, page?.props ?? {});
 

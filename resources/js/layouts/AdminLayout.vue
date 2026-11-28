@@ -34,6 +34,7 @@ type AdminNavItem = {
 };
 
 const page = usePage<{
+    name: string; // NORTHDECK: shown in the sidebar
     auth: { user: { email: string; name: string } | null };
     staff: { admin: boolean; sales: boolean };
     adminNav: { key: string; items: AdminNavItem[] }[] | null;
@@ -182,8 +183,10 @@ const focusRing =
                         alt=""
                         class="size-4 shrink-0 object-contain invert dark:invert-0"
                     />
-                    <span class="text-[14px]/4 font-semibold tracking-[-0.01em]"
-                        >ServerOS</span
+                    <!-- NORTHDECK: the panel's name, not ServerOS -->
+                    <span
+                        class="text-[14px]/4 font-semibold tracking-[-0.01em]"
+                        >{{ page.props.name }}</span
                     >
                     <span
                         class="rounded-[4px] bg-(--ds-hover) px-1.5 text-[10px]/4 font-semibold tracking-wide text-(--ds-text-muted) uppercase"

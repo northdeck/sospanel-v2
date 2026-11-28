@@ -3,6 +3,8 @@
 namespace App\Northdeck;
 
 use App\Models\Workspace;
+use App\Northdeck\Admin\AdminArea;
+use App\Northdeck\Admin\PanelSettings;
 use App\Northdeck\Sso\Http\Middleware\RefusePasswordWhenSsoRequired;
 use App\Northdeck\Sso\Http\Middleware\RequireWorkspaceSso;
 use App\Northdeck\Sso\InstanceConnection;
@@ -40,9 +42,12 @@ final class NorthdeckServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // What admins saved on /admin/panel goes over the env first.
+        PanelSettings::apply($this->app->make('config'));
         self::applyDefaults($this->app->make('config'));
 
         $extensions = $this->app->make(Extensions::class);
+        AdminArea::register($extensions);
 
         $extensions->routes(Extensions::SIGN_IN, Routes::signIn(...));
         $extensions->routes(Extensions::WORKSPACE, Routes::workspace(...));

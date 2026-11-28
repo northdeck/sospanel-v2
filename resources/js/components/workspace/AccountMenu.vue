@@ -50,6 +50,7 @@ const page = usePage<{
     panelVersion?: string | null;
     workspace?: Workspace;
     extensions?: { nav: { key: string; label: string; path: string }[] } | null;
+    staff?: { admin: boolean; sales: boolean }; // NORTHDECK: the Admin link
 }>();
 const user = computed(() => page.props.auth.user);
 
@@ -311,6 +312,16 @@ const shortcut =
                                 $t('Account settings')
                             }}</span>
                         </Link>
+                    </DropdownMenuItem>
+
+                    <!-- NORTHDECK: instance admins get a way into /admin -->
+                    <DropdownMenuItem v-if="page.props.staff?.admin" as-child>
+                        <a :href="`${page.props.appUrl}/admin`" :class="row">
+                            <FilledIcon name="key-fill" :class="icon" />
+                            <span class="min-w-0 flex-1 truncate">{{
+                                $t('Admin')
+                            }}</span>
+                        </a>
                     </DropdownMenuItem>
 
                     <DropdownMenuSub>
