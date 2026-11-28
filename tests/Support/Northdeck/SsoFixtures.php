@@ -2,6 +2,7 @@
 
 namespace Tests\Support\Northdeck;
 
+use App\Enums\Plan;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceEmailDomain;
@@ -14,7 +15,9 @@ final class SsoFixtures
 {
     public static function workspace(string $domain = 'acme.test', bool $verified = true): Workspace
     {
-        $workspace = Workspace::factory()->create();
+        // On the cloud edition (the tests' edition) the Member and Viewer
+        // roles need Pro. SSO and SCIM come from config/northdeck.php.
+        $workspace = Workspace::factory()->onPlan(Plan::Pro)->create();
         $email = new WorkspaceEmailDomain(['domain' => $domain]);
         $email->workspace_id = $workspace->id;
         $email->verified_at = $verified ? now() : null;

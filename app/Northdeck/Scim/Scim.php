@@ -6,8 +6,10 @@ use App\Enums\WorkspaceRole;
 use App\Models\Activity;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Northdeck\Roles\RoleMapping;
 use App\Northdeck\Sso\Models\SsoConnection;
 use App\Northdeck\Sso\Models\SsoGroupMapping;
+use App\Support\Workspaces\RoleChoice;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -118,8 +120,8 @@ final class Scim
         $member = $workspace->hasMember($user);
 
         if ($active && ! $member) {
-            $role = self::roleFor($workspace, $scim) ?? WorkspaceRole::Member;
-            $workspace->members()->attach($user, ['role' => $role->value]);
+            $role = self::roleFor($workspace, $scim) ?? RoleChoice::of(WorkspaceRole::Member, null);
+            $workspace->members()->attach($user, RoleMapping::pivot($role));
             Activity::system($workspace, 'member.join', $user->name, meta: ['via' => 'scim', 'role' => $role->label()]);
 
             return;
@@ -140,22 +142,19 @@ final class Scim
         }
     }
 
-    /** The highest role any of the person's SCIM groups maps to. */
-    public static function roleFor(Workspace $workspace, ScimUser $scim): ?WorkspaceRole
+    /** The role with the most access any of the person's SCIM groups maps to. */
+    public static function roleFor(Workspace $workspace, ScimUser $scim): ?RoleChoice
     {
         $names = $scim->groups()->get()->flatMap(fn (ScimGroup $g) => array_filter([$g->display_name, $g->external_id]))->unique()->values()->all();
         if ($names === []) {
             return null;
         }
 
-        $order = ['admin' => 3, 'member' => 2, 'viewer' => 1];
-        $roles = SsoGroupMapping::query()
+        return RoleMapping::best($workspace, SsoGroupMapping::query()
             ->whereIn('connection_id', SsoConnection::query()->where('workspace_id', $workspace->id)->select('id'))
             ->whereIn('group', $names)
             ->pluck('role')
-            ->sortByDesc(fn (string $role) => $order[$role] ?? 0);
-
-        return WorkspaceRole::tryFrom((string) $roles->first());
+            ->map(fn ($role) => (string) $role));
     }
 
     public static function syncRole(Workspace $workspace, ScimUser $scim): void
@@ -163,12 +162,18 @@ final class Scim
         $user = $scim->user;
         $current = $workspace->roleOf($user);
         $mapped = self::roleFor($workspace, $scim);
-        if ($current === null || $mapped === null || $current === WorkspaceRole::Owner || $current === $mapped) {
+        if ($current === null || $mapped === null || $current === WorkspaceRole::Owner) {
+            return;
+        }
+        $customId = $workspace->members()->whereKey($user->id)->value('user_workspace.custom_role_id');
+        $customId = $customId === null ? null : (int) $customId;
+        if ($mapped->matches($current->value, $customId)) {
             return;
         }
 
-        $workspace->members()->updateExistingPivot($user->id, ['role' => $mapped->value, 'custom_role_id' => null]);
-        Activity::system($workspace, 'member.role', $user->name, meta: ['via' => 'sso_sync', 'role' => $mapped->label(), 'from' => $current->label()]);
+        $from = RoleChoice::of($current, $customId === null ? null : $workspace->customRoles()->find($customId))->label();
+        $workspace->members()->updateExistingPivot($user->id, RoleMapping::pivot($mapped));
+        Activity::system($workspace, 'member.role', $user->name, meta: ['via' => 'sso_sync', 'role' => $mapped->label(), 'from' => $from]);
     }
 
     public static function findOrCreateUser(string $email, string $name): User

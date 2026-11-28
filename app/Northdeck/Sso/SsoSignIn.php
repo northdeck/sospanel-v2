@@ -9,10 +9,12 @@ use App\Models\AccountEvent;
 use App\Models\Activity;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Northdeck\Roles\RoleMapping;
 use App\Northdeck\Sso\Models\SsoConnection;
 use App\Northdeck\Sso\Models\SsoGroupMapping;
 use App\Northdeck\Sso\Models\SsoIdentity;
 use App\Support\Extensions\Extensions;
+use App\Support\Workspaces\RoleChoice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -49,7 +51,9 @@ final class SsoSignIn
         }
 
         $identity = SsoIdentity::query()->where('connection_id', $connection->id)->where('subject', $claims->subject)->first();
-        $role = $this->mappedRole($connection, $claims->groups)?->value;
+        $workspace = $this->workspaceOf($connection);
+        $role = $workspace === null ? null : $this->mappedRole($workspace, $connection, $claims->groups);
+        $role = $role === null ? null : RoleMapping::value($role);
 
         if ($identity !== null) {
             return $identity->user->suspended_at !== null
@@ -147,56 +151,50 @@ final class SsoSignIn
     /** @param  list<string>  $groups */
     public function syncMembership(Workspace $workspace, SsoConnection $connection, User $user, array $groups): void
     {
-        $mapped = $this->mappedRole($connection, $groups);
+        $mapped = $this->mappedRole($workspace, $connection, $groups);
         $current = $workspace->roleOf($user);
 
         if ($current === null) {
             if (! $connection->jit) {
                 return;
             }
-            $role = $mapped ?? (WorkspaceRole::tryFrom($connection->default_role) ?? WorkspaceRole::Member);
-            if ($role === WorkspaceRole::Owner) {
-                $role = WorkspaceRole::Admin;
-            }
-            $workspace->members()->attach($user, ['role' => $role->value]);
+            $role = $mapped ?? RoleMapping::choice($workspace, $connection->default_role) ?? RoleChoice::of(WorkspaceRole::Member, null);
+            $workspace->members()->attach($user, RoleMapping::pivot($role));
             Activity::record($workspace, 'member.join', user: $user, meta: ['via' => 'sso', 'role' => $role->label()]);
 
             return;
         }
 
         // Owners keep their role; group changes never demote them.
-        if ($mapped === null || $current === WorkspaceRole::Owner || $current === $mapped) {
+        if ($mapped === null || $current === WorkspaceRole::Owner) {
+            return;
+        }
+        $customId = $workspace->members()->whereKey($user->id)->value('user_workspace.custom_role_id');
+        $customId = $customId === null ? null : (int) $customId;
+        if ($mapped->matches($current->value, $customId)) {
             return;
         }
 
-        $workspace->members()->updateExistingPivot($user->id, ['role' => $mapped->value, 'custom_role_id' => null]);
-        Activity::record($workspace, 'member.role', $user->name, user: $user, meta: ['via' => 'sso_sync', 'role' => $mapped->label(), 'from' => $current->label()]);
+        $from = RoleChoice::of($current, $customId === null ? null : $workspace->customRoles()->find($customId))->label();
+        $workspace->members()->updateExistingPivot($user->id, RoleMapping::pivot($mapped));
+        Activity::record($workspace, 'member.role', $user->name, user: $user, meta: ['via' => 'sso_sync', 'role' => $mapped->label(), 'from' => $from]);
     }
 
     /**
-     * The most powerful role any of the person's groups maps to.
+     * The role with the most access any of the person's groups maps to:
+     * a built-in role or one of the workspace's custom roles.
      *
      * @param  list<string>  $groups
      */
-    public function mappedRole(SsoConnection $connection, array $groups): ?WorkspaceRole
+    public function mappedRole(Workspace $workspace, SsoConnection $connection, array $groups): ?RoleChoice
     {
         if ($groups === []) {
             return null;
         }
 
-        $order = [WorkspaceRole::Admin->value => 3, WorkspaceRole::Member->value => 2, WorkspaceRole::Viewer->value => 1];
-        $best = null;
-
-        $connection->groupMappings
+        return RoleMapping::best($workspace, $connection->groupMappings
             ->filter(fn (SsoGroupMapping $m) => in_array($m->group, $groups, true))
-            ->each(function (SsoGroupMapping $m) use (&$best, $order): void {
-                $role = WorkspaceRole::tryFrom($m->role);
-                if ($role !== null && isset($order[$role->value]) && ($best === null || $order[$role->value] > ($order[$best->value] ?? 0))) {
-                    $best = $role;
-                }
-            });
-
-        return $best;
+            ->map(fn (SsoGroupMapping $m) => $m->role));
     }
 
     public function workspaceOf(SsoConnection $connection): ?Workspace

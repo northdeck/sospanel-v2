@@ -77,6 +77,18 @@ return [
         ],
     ],
 
+    'roles' => [
+        // Workspace roles with hand-picked permissions (Settings › Members).
+        // Upstream sells these; Northdeck's build has them on.
+        'custom' => (bool) env('NORTHDECK_CUSTOM_ROLES', true),
+    ],
+
+    'admin' => [
+        // The /admin pages for instance admins (php artisan admin:grant).
+        // Values saved there override the env values above.
+        'enabled' => (bool) env('NORTHDECK_ADMIN', true),
+    ],
+
     'scim' => [
         // SCIM 2.0 provisioning. A preview: off unless NORTHDECK_SCIM is set.
         'enabled' => (bool) env('NORTHDECK_SCIM', false),

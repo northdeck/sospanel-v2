@@ -8,9 +8,9 @@ use App\Models\Workspace;
 use App\Support\Entitlements\Entitlements;
 
 /**
- * Northdeck's build has its own SSO and SCIM, so every workspace gets them
- * when they're switched on in config/northdeck.php. Everything else is
- * answered by the panel's own entitlements.
+ * Northdeck's build has its own SSO and SCIM, and turns on custom roles, so
+ * every workspace gets them when they're switched on in config/northdeck.php.
+ * Everything else is answered by the panel's own entitlements.
  */
 final readonly class NorthdeckEntitlements implements Entitlements
 {
@@ -26,6 +26,7 @@ final readonly class NorthdeckEntitlements implements Entitlements
         return match ($feature) {
             Feature::Sso => (bool) config('northdeck.sso.enabled') || $this->inner->has($workspace, $feature),
             Feature::Scim => ((bool) config('northdeck.sso.enabled') && (bool) config('northdeck.scim.enabled')) || $this->inner->has($workspace, $feature),
+            Feature::CustomRoles => (bool) config('northdeck.roles.custom') || $this->inner->has($workspace, $feature),
             default => $this->inner->has($workspace, $feature),
         };
     }
