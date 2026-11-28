@@ -120,6 +120,11 @@ final class Extensions
             return $own;
         }
 
+        // NORTHDECK: Northdeck's own pages live in resources/js/northdeck/pages.
+        if ($folder === 'pages' && is_file(base_path($northdeck = "resources/js/northdeck/pages/{$component}.{$extension}"))) {
+            return $northdeck;
+        }
+
         $base = base_path().DIRECTORY_SEPARATOR;
         foreach (glob(base_path("vendor/serveroshq/*/resources/js/{$folder}/{$component}.{$extension}")) ?: [] as $path) {
             return str_replace(DIRECTORY_SEPARATOR, '/', substr($path, strlen($base)));

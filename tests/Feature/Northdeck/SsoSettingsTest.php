@@ -3,6 +3,7 @@
 use App\Models\Activity;
 use App\Models\WorkspaceEmailDomain;
 use App\Northdeck\Sso\Models\SsoConnection;
+use App\Support\Extensions\Extensions;
 use Tests\Support\Northdeck\FakeIdp;
 use Tests\Support\Northdeck\SsoFixtures;
 
@@ -98,4 +99,22 @@ test('changing the issuer unlinks people, so a new provider can’t take over ac
 
     expect($connection->identities()->count())->toBe(0)
         ->and(Activity::query()->where('action', 'sso.identities_reset')->exists())->toBeTrue();
+});
+
+test('the settings page gets the workspace the settings layout reads', function () {
+    $workspace = SsoFixtures::workspace();
+
+    $this->actingAs($workspace->owner)->get($workspace->url('/settings/sso'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('workspace/settings/Sso')
+            ->where('workspace.slug', $workspace->slug));
+});
+
+test('Vite is asked for the Northdeck page files, not missing upstream paths', function () {
+    expect(Extensions::pageEntry('auth/NorthdeckSso', 'pages', 'vue'))
+        ->toBe('resources/js/northdeck/pages/auth/NorthdeckSso.vue')
+        ->and(Extensions::pageEntry('workspace/settings/Sso', 'pages', 'vue'))
+        ->toBe('resources/js/northdeck/pages/workspace/settings/Sso.vue')
+        ->and(Extensions::pageEntry('auth/Login', 'pages', 'vue'))
+        ->toBe('resources/js/pages/auth/Login.vue');
 });

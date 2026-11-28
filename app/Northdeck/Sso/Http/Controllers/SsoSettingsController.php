@@ -48,6 +48,7 @@ final class SsoSettingsController extends Controller
         $marker = $request->session()->get('northdeck_sso');
 
         return Inertia::render('workspace/settings/Sso', [
+            'workspace' => $workspace->toPageProps(),
             'connections' => SsoConnection::query()
                 ->where('workspace_id', $workspace->id)
                 ->where('is_instance', false)
