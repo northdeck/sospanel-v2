@@ -146,7 +146,7 @@ Optional: turn on **Encrypted assertions** and give the provider the panel's cer
 
 ## Groups and roles
 
-On each connection, **Groups to roles** maps a group name (or ID) to Admin, Member or Viewer. At every sign-in the person gets the highest role any of their groups maps to. People whose groups map to nothing keep their role; new people get the connection's default role. The workspace owner always stays owner. Role changes from groups show in Activity.
+On each connection, **Groups to roles** maps a group name (or ID) to Admin, Member, Viewer or one of the workspace's custom roles (Settings › Members › Your roles). At every sign-in the person gets the role with the most access any of their groups maps to; a built-in role wins a tie with a custom one. The connection's default role can be a custom role too. If a custom role is deleted, mappings to it are skipped and a default role that named it falls back to Member. People whose groups map to nothing keep their role; new people get the connection's default role. The workspace owner always stays owner. Role changes from groups show in Activity.
 
 ## Require SSO and break-glass
 
