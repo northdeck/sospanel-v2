@@ -7,6 +7,7 @@
 #   serveros-panel status               what's running
 #   serveros-panel logs [service]       follow the logs (web, queue, scheduler, gateway, db, redis)
 #   serveros-panel upgrade [version]    back up, pull the new image and restart on it
+#                                       (Northdeck's build: build the repo's newest commit instead)
 #   serveros-panel backup               the database, storage and .env, into backups/
 #   serveros-panel restore <backup>     put a backup back (replaces what's there now)
 #   serveros-panel gateway-certificate  renew the gateway's certificate if it runs out within 30 days
@@ -49,6 +50,69 @@ set_env() {
     else
         printf '%s=%s\n' "$key" "$value" >> .env
     fi
+}
+
+# NORTHDECK: Northdeck's build isn't a published image. When SERVEROS_IMAGE
+# isn't upstream's, upgrades build a commit of Northdeck's repository
+# (NORTHDECK_UPDATE_REPO, branch NORTHDECK_UPDATE_BRANCH) from a clone in
+# $DIR/source. See docs/admin.md, "Updates".
+env_value() {
+    grep -E "^$1=" .env 2>/dev/null | tail -n1 | cut -d= -f2- | sed -e "s/^['\"]//" -e "s/['\"]\$//" || true
+}
+
+source_build() {
+    case "$(image)" in
+        ghcr.io/serveroshq/*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+northdeck_upgrade() {
+    # northdeck_upgrade [commit] [owner/repo]: build that commit (default: the
+    # branch's newest) into SERVEROS_IMAGE and restart the panel on it.
+    local commit="${1:-}" repo="${2:-}" branch src work
+    repo="${repo:-$(env_value NORTHDECK_UPDATE_REPO)}"
+    repo="${repo:-northdeck/sospanel-v2}"
+    branch="$(env_value NORTHDECK_UPDATE_BRANCH)"
+    branch="${branch:-main}"
+    case "$repo" in
+        */*/* | *[!A-Za-z0-9_./-]*) fail "$repo isn't an owner/repo name." ;;
+    esac
+    command -v git >/dev/null || fail "git isn't installed (apt install git)."
+
+    src="$DIR/source"
+    if [ ! -d "$src/.git" ]; then
+        say "Cloning https://github.com/$repo"
+        git clone --quiet "https://github.com/$repo.git" "$src"
+    fi
+    git -C "$src" remote set-url origin "https://github.com/$repo.git"
+    git -C "$src" fetch --quiet origin "$branch"
+    [ -n "$commit" ] || commit="$(git -C "$src" rev-parse FETCH_HEAD)"
+    git -C "$src" cat-file -e "${commit}^{commit}" 2>/dev/null || git -C "$src" fetch --quiet origin "$commit"
+
+    say "Backing up first"
+    backup quiet
+
+    # Build from a clean copy of that commit, so nothing left in the clone
+    # ends up in the image.
+    work="$DIR/.build"
+    rm -rf "$work" && mkdir -p "$work"
+    git -C "$src" archive "$commit" | tar -x -C "$work"
+    say "Building $(image) from ${commit:0:7} (a few minutes)"
+    docker build --quiet -f "$work/docker/self-hosted/Dockerfile" --build-arg "NORTHDECK_COMMIT=$commit" -t "$(image)" "$work" >/dev/null
+    # The compose file and this script come with the commit, so they match it.
+    cp "$work/docker/self-hosted/compose.yaml" compose.yaml
+    install -m 755 "$work/docker/self-hosted/serveros-panel" /usr/local/bin/serveros-panel.new \
+        && mv /usr/local/bin/serveros-panel.new /usr/local/bin/serveros-panel
+    rm -rf "$work"
+    if grep -q requirepass compose.yaml && ! grep -q '^REDIS_PASSWORD=.' .env; then
+        set_env REDIS_PASSWORD "$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    fi
+    # Migrations run as the web container starts.
+    compose up -d --remove-orphans
+    wait_healthy
+    schedule
+    say "Updated to ${commit:0:7}."
 }
 
 wait_healthy() {
@@ -138,9 +202,26 @@ finish_update() {
 }
 
 updater() {
-    local claim id version current tag=""
+    local claim id version current tag="" commit repo
     exec 9>"$DIR/.updater.lock"
     flock -n 9 || return 0
+    # NORTHDECK: Northdeck's build takes its updates from the panel's
+    # /admin/updates (and auto-update), by commit.
+    if source_build; then
+        claim="$(compose exec -T web php artisan northdeck:update-claim 2>/dev/null | tr -d '\r' | tail -n1)" || return 0
+        [ -n "$claim" ] || return 0
+        read -r id commit repo <<<"$claim"
+        case "$id" in '' | *[!0-9]*) return 0 ;; esac
+        case "$commit" in *[!0-9a-f]*) return 0 ;; esac
+        [ "${#commit}" -eq 40 ] || return 0
+        say "$(date -u '+%F %T') Updating to ${commit:0:7} from $repo, as asked for in the panel"
+        if "$0" northdeck-upgrade "$commit" "$repo"; then
+            compose exec -T web php artisan northdeck:update-finished "$id" || true
+        else
+            compose exec -T web php artisan northdeck:update-finished "$id" --failed="The update stopped partway. See /var/log/serveros-panel-update.log on the server." || true
+        fi
+        return 0
+    fi
     claim="$(compose exec -T web php artisan panel:update-claim 2>/dev/null | tr -d '\r' | tail -n1)" || return 0
     [ -n "$claim" ] || return 0
     id="${claim%% *}"
@@ -170,6 +251,11 @@ updater() {
 
 upgrade() {
     local version="${1:-}" current
+    # NORTHDECK: no published image to pull; build the repo's newest commit.
+    if [ -z "$version" ] && source_build; then
+        northdeck_upgrade
+        return
+    fi
     if [ -n "$version" ]; then
         current="$(image)"
         set_env SERVEROS_IMAGE "${current%:*}:${version#v}"
@@ -198,6 +284,7 @@ case "$command" in
     status) compose ps ;;
     logs) compose logs -f --tail=200 "$@" ;;
     upgrade) upgrade "$@" ;;
+    northdeck-upgrade) northdeck_upgrade "$@" ;; # NORTHDECK
     backup) backup "${1:+quiet}" ;;
     restore) restore "$@" ;;
     gateway-certificate) gateway_certificate ;;

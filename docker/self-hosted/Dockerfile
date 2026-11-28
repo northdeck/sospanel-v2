@@ -101,6 +101,8 @@ RUN rm -rf .env public/build public/hot bootstrap/cache/*.php \
 # What runs.
 FROM php AS panel
 ARG SERVEROS_VERSION=dev
+# NORTHDECK: the commit this was built from, for updates from the repo.
+ARG NORTHDECK_COMMIT=
 COPY --from=gateway /usr/local/bin/serveros-gateway /usr/local/bin/serveros-gateway
 COPY --from=build /app /app
 COPY docker/self-hosted/Caddyfile /etc/caddy/Caddyfile
@@ -121,6 +123,7 @@ RUN useradd --uid 1000 --user-group --home-dir /app --no-create-home serveros \
     && chown -R serveros:serveros /app/storage /app/bootstrap/cache /data /config /gateway \
     && chmod +x /usr/local/bin/serveros-entrypoint \
     && echo "${SERVEROS_VERSION}" > /app/VERSION \
+    && echo "${NORTHDECK_COMMIT}" > /app/NORTHDECK_COMMIT \
     && ln -s storage/app/private/settings.env /app/.env \
     && ln -s /app/storage/app/public /app/public/storage
 

@@ -41,7 +41,13 @@ type Group = {
 const props = defineProps<{
     groups: Group[];
     notManaged: { keys: string; why: string }[];
+    adminEmail: string | null;
 }>();
+
+const testEmail = useForm({ to: props.adminEmail ?? '' });
+function sendTest(): void {
+    testEmail.post('/admin/settings/test-email', { preserveScroll: true });
+}
 
 // A field holds only what was saved here. Empty means "use .env", whose
 // value shows as the placeholder, so saving never copies .env values over.
@@ -271,6 +277,35 @@ const errorFor = (key: string): string | undefined =>
                             </template>
                         </p>
                         <InputError :message="errorFor(field.key)" />
+                    </SettingsLine>
+                    <SettingsLine
+                        v-if="group.key === 'mail'"
+                        :label="$t('Send a test email')"
+                        :hint="
+                            $t(
+                                'Uses the settings saved now, so save first if you changed any.',
+                            )
+                        "
+                        input-id="test-email-to"
+                    >
+                        <div class="flex items-center gap-2">
+                            <Input
+                                id="test-email-to"
+                                v-model="testEmail.to"
+                                type="email"
+                                :placeholder="$t('email@example.com')"
+                                @keydown.enter.prevent="sendTest"
+                            />
+                            <AppButton
+                                :disabled="
+                                    testEmail.processing || !testEmail.to
+                                "
+                                @click="sendTest"
+                            >
+                                {{ $t('Send') }}
+                            </AppButton>
+                        </div>
+                        <InputError :message="testEmail.errors.to" />
                     </SettingsLine>
                 </div>
             </Tile>

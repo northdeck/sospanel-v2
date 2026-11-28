@@ -16,9 +16,13 @@ use App\Northdeck\Sso\NorthdeckEntitlements;
 use App\Northdeck\Sso\Routes;
 use App\Northdeck\Sso\SsoSignInHooks;
 use App\Northdeck\Sso\Support\SsoUrls;
+use App\Northdeck\Updates\CheckUpdates;
+use App\Northdeck\Updates\ClaimUpdate;
+use App\Northdeck\Updates\FinishUpdate;
 use App\Support\Entitlements\Entitlements;
 use App\Support\Extensions\Extensions;
 use App\Support\Extensions\SettingsItem;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Http\Request;
 use Illuminate\Support\ServiceProvider;
@@ -45,6 +49,13 @@ final class NorthdeckServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        if ($this->app->runningInConsole()) {
+            $this->commands([CheckUpdates::class, ClaimUpdate::class, FinishUpdate::class]);
+        }
+        // New commits on Northdeck's repository, hourly (and auto-update).
+        $this->callAfterResolving(Schedule::class, fn (Schedule $schedule) => $schedule
+            ->command('northdeck:check-updates')->hourlyAt(7)->withoutOverlapping()->name('northdeck-check-updates'));
+
         // What admins saved on /admin/panel goes over the env first.
         PanelSettings::apply($this->app->make('config'));
         self::applyDefaults($this->app->make('config'));
